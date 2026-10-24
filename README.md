@@ -162,6 +162,7 @@ edgeone makers deploy -n <项目名>
 | `context.utils.abort_active_run` 参数形态随平台版本变化 | 停止按钮可能只中断前端流 | 已做异常兜底；客户端断开时 `signal` 仍会中止图执行 |
 | 前端非 SSE 的错误响应 | 可能显示为空回答 | 已识别 `application/json` 响应并转成错误提示 |
 | 平台 checkpointer 会序列化 `configurable` | 放入 EnvConfig / 工具对象会导致 `MemoryStorageError` | 依赖改为闭包注入，`configurable` 仅保留 `thread_id`（已线上验证） |
+| 平台 DeepSeek 推理模型默认开启思考 | 复杂方案思考耗时长，且与正文共享 token 预算，易超时或 JSON 截断 | 已在 `models.py` 对 `@makers/deepseek` 系列关闭思考，并将输出上限放宽到 16000；长任务每 20 秒发送一次心跳 |
 | devDependencies 审计告警 | `npm audit` 在开发依赖中有 moderate/high 提示 | 生产依赖 `npm audit --omit=dev` 为 0；升级 Vite 主版本需单独评估 |
 
 ## 十、免责声明

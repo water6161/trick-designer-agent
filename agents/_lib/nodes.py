@@ -90,7 +90,10 @@ async def _invoke_structured(
             "parameters": schema.model_json_schema(),
         },
     }
-    bound = model.bind_tools([tool], tool_choice="auto")
+    bound = model.bind_tools(
+        [tool],
+        tool_choice={"type": "function", "function": {"name": "emit_result"}},
+    )
     working = list(messages)
 
     last_error: str = ""

@@ -34,27 +34,58 @@ def _sse(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
+HEARTBEAT_SECONDS = 20
+
+
 async def _run_graph(graph: Any, payload: dict[str, Any], config: dict[str, Any]):
+    """转发图事件；长时间无事件时发送心跳，避免前端看起来像卡死。"""
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    end = object()
+
+    async def produce() -> None:
+        try:
+            async for chunk in graph.astream(
+                payload,
+                config=config,
+                stream_mode=["updates", "custom"],
+                version="v2",
+            ):
+                if chunk.get("type") != "custom":
+                    continue
+                data = chunk.get("data") or {}
+                event = str(data.get("event") or "")
+                if not event:
+                    continue
+                await queue.put((event, {key: value for key, value in data.items() if key != "event"}))
+        except asyncio.TimeoutError:
+            logger.error("graph timeout")
+            await queue.put(
+                ("error", {"code": "timeout", "message": "生成超时了，请稍后重试，或把需求拆小一点。"})
+            )
+        except Exception as exc:  # noqa: BLE001 - 统一转成前端友好提示
+            logger.exception("graph failed", exc)
+            await queue.put(("error", {"code": "agent_error", "message": _friendly_error(exc)}))
+        finally:
+            await queue.put(end)
+
+    task = asyncio.ensure_future(produce())
     try:
-        async for chunk in graph.astream(
-            payload,
-            config=config,
-            stream_mode=["updates", "custom"],
-            version="v2",
-        ):
-            if chunk.get("type") != "custom":
+        while True:
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=HEARTBEAT_SECONDS)
+            except asyncio.TimeoutError:
+                yield "status", {"stage": "waiting", "label": "模型仍在生成中，请稍候…"}
                 continue
-            data = chunk.get("data") or {}
-            event = str(data.get("event") or "")
-            if not event:
-                continue
-            yield event, {key: value for key, value in data.items() if key != "event"}
-    except asyncio.TimeoutError:
-        logger.error("graph timeout")
-        yield "error", {"code": "timeout", "message": "生成超时了，请稍后重试，或把需求拆小一点。"}
-    except Exception as exc:  # noqa: BLE001 - 统一转成前端友好提示
-        logger.exception("graph failed", exc)
-        yield "error", {"code": "agent_error", "message": _friendly_error(exc)}
+            if item is end:
+                break
+            yield item
+    finally:
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except BaseException:
+                pass
 
 
 def _friendly_error(exc: BaseException) -> str:
