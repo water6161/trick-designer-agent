@@ -8,6 +8,7 @@
 | --- | --- |
 | Makers 项目 | `trick-designer-agent`（Project ID：`makers-bfvelax99njw`） |
 | 临时域名 | `https://trick-designer-agent-5qq5gzrp.edgeone.cool` |
+| Git 仓库 | `https://github.com/water6161/trick-designer-agent`（已在 Makers 控制台关联，分支 `main`） |
 | 控制台 | `https://console.cloud.tencent.com/edgeone/pages/project/makers-bfvelax99njw` |
 | 访问方式 | 首次访问使用 `edgeone makers deploy` 输出的带 `eo_token` 的 URL；绑定自定义域名后可直接使用正式域名 |
 
