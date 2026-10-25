@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatMessage from './components/ChatMessage'
 import Composer from './components/Composer'
+import ExportBar from './components/ExportBar'
 import Sidebar from './components/Sidebar'
 import Welcome from './components/Welcome'
 import { MenuIcon } from './components/icons'
@@ -245,6 +246,7 @@ export default function App() {
   const activeSession = sessions.find((item) => item.id === activeId)
   const headerTitle = activeSession?.title || (messages.length > 0 ? '新剧本' : '新对话')
   const loading = hydrating || hydratingHistory
+  const hasPlan = messages.some((item) => item.role === 'assistant' && item.content.length > 200)
 
   return (
     <div className="app">
@@ -276,6 +278,8 @@ export default function App() {
             {streaming ? status || '生成中' : loading ? '连接中' : '待命中'}
           </div>
         </header>
+
+        <ExportBar conversationId={activeId} hasPlan={hasPlan && !streaming} disabled={loading} />
 
         <div className="chat-scroll" ref={scrollRef} onScroll={() => {
           const container = scrollRef.current

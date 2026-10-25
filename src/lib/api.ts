@@ -119,6 +119,28 @@ export async function stopRun(conversationId: string): Promise<void> {
   }
 }
 
+export interface ExportPlan {
+  title: string
+  markdown: string
+  lockScore: number | null
+}
+
+export async function exportPlan(conversationId: string): Promise<ExportPlan> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'export' }),
+  })
+  const data = (await readJson(response)) as Record<string, unknown>
+  const markdown = typeof data.markdown === 'string' ? data.markdown : ''
+  if (!markdown) throw new Error('当前会话还没有可导出的完整方案。')
+  return {
+    title: typeof data.title === 'string' && data.title ? data.title : '未命名诡计方案',
+    markdown,
+    lockScore: typeof data.lockScore === 'number' ? data.lockScore : null,
+  }
+}
+
 export async function streamChat(
   conversationId: string,
   message: string,

@@ -350,6 +350,45 @@ async def _handle_history(store: Any, conversation_id: str) -> dict[str, Any]:
     return {"messages": output}
 
 
+async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
+    """导出当前会话最后一版完整方案（优先取非 partial 的最长 assistant 消息）。"""
+    try:
+        messages = await store.get_messages(conversation_id=conversation_id, limit=100)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("export get_messages failed", exc)
+        return {"error": "读取会话内容失败，请重试。"}
+
+    best: dict[str, Any] = {}
+    title = ""
+    lock_score: Any = None
+    for message in messages or []:
+        plain = _to_plain(message)
+        if not isinstance(plain, dict) or plain.get("role") != "assistant":
+            continue
+        text = _content_text(plain.get("content")).strip()
+        if len(text) < 200:  # 跳过闲聊回复，只导出成稿
+            continue
+        metadata = plain.get("metadata") or {}
+        if isinstance(metadata, dict):
+            if metadata.get("partial"):
+                continue
+            if not title:
+                title = str(metadata.get("title") or "")
+            if lock_score is None and metadata.get("lockScore") is not None:
+                lock_score = metadata.get("lockScore")
+        if len(text) > len(best.get("markdown", "")):
+            best = {"markdown": text}
+
+    if not best.get("markdown"):
+        return {"error": "当前会话还没有可导出的完整方案。先生成一次方案再导出。"}
+
+    return {
+        "title": title or "未命名诡计方案",
+        "markdown": best["markdown"],
+        "lockScore": lock_score,
+    }
+
+
 async def _handle_delete(store: Any, conversation_id: str) -> dict[str, Any]:
     try:
         await store.delete_conversation(conversation_id=conversation_id)
@@ -424,6 +463,8 @@ async def handler(context: Any):
     if action == "delete":
         target = str(body.get("conversation_id") or conversation_id)
         return await _handle_delete(store, target)
+    if action == "export":
+        return await _handle_export(store, conversation_id)
     if action != "chat":
         return {"error": f"未知 action：{action}"}
 
