@@ -24,8 +24,8 @@ def _extra_body(model: str) -> dict[str, Any] | None:
 
 
 def _max_tokens(model: str) -> int:
-    """平台网关可用 16000；第三方 OpenAI 兼容服务（如 qwen-plus）输出上限一般 8192。"""
-    return 16000 if model.startswith("@makers/") else 8000
+    """输出上限统一 16000（qwen-plus 等第三方兼容服务实测可接受）。"""
+    return 16000
 
 
 def init_models(env: EnvConfig) -> None:
