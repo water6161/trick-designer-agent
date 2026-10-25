@@ -20,6 +20,7 @@ class EnvConfig:
     model: str
     fast_model: str
     wsa_api_key: str
+    amap_key: str = ""
 
 
 def _env_get(env: Any, key: str) -> str:
@@ -65,10 +66,14 @@ def load_env(env: Any) -> EnvConfig:
     # 轻量模型用于 understand 等小任务；未配置时退回主模型。
     fast_model = _env_get(env, "OPENAI_MODEL_FAST") or model
 
+    # 高德开放平台密钥：特殊设定包含真实地名时用于查询当地天气，增强环境细节。
+    amap_key = _env_get(env, "AMAP_KEY")
+
     return EnvConfig(
         api_key=api_key,
         base_url=base_url.rstrip("/"),
         model=model,
         fast_model=fast_model,
         wsa_api_key=wsa_api_key,
+        amap_key=amap_key,
     )

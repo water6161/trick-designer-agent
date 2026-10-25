@@ -12,6 +12,7 @@ from langgraph.config import get_stream_writer
 from pydantic import BaseModel, ValidationError
 
 from .config import EnvConfig
+from .amap import extract_place, fetch_weather_note
 from .knowledge import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
@@ -195,7 +196,7 @@ async def understand(
 
 
 async def research(
-    state: AgentState, config: RunnableConfig, *, search_tool: Any = None
+    state: AgentState, config: RunnableConfig, *, search_tool: Any = None, env: EnvConfig | None = None
 ) -> dict[str, Any]:
     writer = get_stream_writer()
     writer({"event": "status", "stage": "research", "label": "正在检索经典诡计与玩家雷点"})
@@ -203,6 +204,15 @@ async def research(
     brief = state.get("brief") or {}
     queries = build_queries(brief)
     results, errors = await run_searches(search_tool, queries)
+
+    # 特殊设定提到真实地名时，用高德取当地天气做环境细节参考（失败静默降级）
+    amap_key = getattr(env, "amap_key", "") if env else ""
+    place = extract_place(str(brief.get("special") or ""))
+    if amap_key and place:
+        note = await fetch_weather_note(amap_key, place)
+        if note:
+            results = list(results) + [note]
+            writer({"event": "notice", "message": f"已参考真实环境细节：{note['title']}。"})
 
     for message in errors:
         writer({"event": "notice", "message": message})

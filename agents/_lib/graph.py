@@ -24,7 +24,7 @@ def build_graph(
     """
     builder = StateGraph(AgentState)
     builder.add_node("understand", partial(understand, env=env))
-    builder.add_node("research", partial(research, search_tool=search_tool))
+    builder.add_node("research", partial(research, search_tool=search_tool, env=env))
     builder.add_node("design", partial(design, env=env))
     builder.add_node("audit", partial(audit, env=env))
     builder.add_node("compose", partial(compose, env=env))
