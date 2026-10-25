@@ -145,6 +145,29 @@ export async function exportPlan(conversationId: string): Promise<ExportPlan> {
   }
 }
 
+export async function streamRetry(
+  conversationId: string,
+  handlers: StreamHandlers,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'retry' }),
+    signal,
+  })
+  if (!response.ok) throw new Error(await readError(response))
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const data = (await response.json()) as Record<string, unknown>
+    throw new Error(
+      (typeof data.error === 'string' && data.error) || '当前没有可恢复的断点，请直接重新发送需求。',
+    )
+  }
+  // 复用流式解析逻辑
+  await consumeStream(response, handlers)
+}
+
 export async function streamChat(
   conversationId: string,
   message: string,
@@ -166,6 +189,10 @@ export async function streamChat(
   if (contentType.includes('application/json')) {
     throw new Error(await readError(response))
   }
+  await consumeStream(response, handlers)
+}
+
+async function consumeStream(response: Response, handlers: StreamHandlers): Promise<void> {
   if (!response.body) {
     throw new Error('当前浏览器不支持流式响应。')
   }

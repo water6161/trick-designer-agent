@@ -472,11 +472,11 @@ async def handler(context: Any):
         return await _handle_delete(store, target)
     if action == "export":
         return await _handle_export(store, conversation_id)
-    if action != "chat":
+    if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
 
     message = str(body.get("message") or "").strip()
-    if not message:
+    if action == "chat" and not message:
         return {"error": "请输入你的剧本设定或问题。"}
     if len(message) > MAX_MESSAGE_CHARS:
         return {"error": f"输入过长（{len(message)} 字），请控制在 {MAX_MESSAGE_CHARS} 字以内。"}
@@ -503,16 +503,11 @@ async def handler(context: Any):
         return {"error": "会话记忆初始化失败，请确认 edgeone.json 已声明 langgraph 框架。"}
 
     config = {"configurable": {"thread_id": conversation_id}}
-    initial = {
-        "messages": [HumanMessage(content=message)],
-        "user_id": user_id,
-    }
 
-    logger.log("chat start", {"conversationId": conversation_id, "chars": len(message)})
-
-    async def generate():
+    async def generate(initial: dict[str, Any] | None, append_user: bool):
         yield _sse("session", {"conversationId": conversation_id})
-        await _append_message(store, conversation_id, "user", message, user_id)
+        if append_user:
+            await _append_message(store, conversation_id, "user", message, user_id)
 
         answer_parts: list[str] = []
         meta: dict[str, Any] = {}
@@ -564,4 +559,19 @@ async def handler(context: Any):
             },
         )
 
-    return context.utils.stream_sse(generate())
+    if action == "retry":
+        # 断点续跑：None 输入让 LangGraph 从 checkpointer 中上次失败的节点继续，
+        # 已成功的节点（如 understand/research）不会重复执行。
+        logger.log("chat resume", {"conversationId": conversation_id})
+        return context.utils.stream_sse(generate(initial=None, append_user=False))
+
+    logger.log("chat start", {"conversationId": conversation_id, "chars": len(message)})
+    return context.utils.stream_sse(
+        generate(
+            initial={
+                "messages": [HumanMessage(content=message)],
+                "user_id": user_id,
+            },
+            append_user=True,
+        )
+    )

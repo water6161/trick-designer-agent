@@ -13,6 +13,7 @@ import {
   newConversationId,
   stopRun,
   streamChat,
+  streamRetry,
 } from './lib/api'
 import type { ChatMessage as ChatMessageType, SessionItem } from './types'
 
@@ -130,6 +131,61 @@ export default function App() {
     }
   }, [])
 
+  const runStream = async (
+    controller: AbortController,
+    assistantId: string,
+    useRetry: boolean,
+    messageText?: string,
+  ) => {
+    setStreaming(true)
+    setStatus(useRetry ? '正在从断点恢复' : '正在连接诡计工作台')
+    stickRef.current = true
+    const handlers = {
+      onStatus: (label: string) => setStatus(label),
+      onStage: (value: string) => setStage(value),
+      onToken: (delta: string) => {
+        pendingRef.current += delta
+        scheduleFlush()
+      },
+      onNotice: (msg: string) => setNotice(msg),
+      onError: (msg: string) => setError(msg),
+    }
+    try {
+      if (useRetry) {
+        await streamRetry(activeId, handlers, controller.signal)
+      } else {
+        await streamChat(activeId, messageText ?? '', handlers, controller.signal)
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setError(err instanceof Error ? err.message : '网络异常，请稍后重试。')
+      }
+    } finally {
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current)
+        flushTimerRef.current = null
+      }
+      flushTokens()
+      setMessages((prev) => prev.filter((item) => item.id !== assistantId || item.content.trim().length > 0))
+      setStreaming(false)
+      setStage('')
+      setStatus('')
+      abortRef.current = null
+      void refreshSessions()
+    }
+  }
+
+  const retryFromCheckpoint = async () => {
+    if (streaming || hydrating) return
+    setError('')
+    setNotice('')
+    const controller = new AbortController()
+    abortRef.current = controller
+    const assistantId = newConversationId()
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }])
+    await runStream(controller, assistantId, true)
+  }
+
   const send = async (raw?: string) => {
     const text = (raw ?? input).trim()
     if (!text || streaming || hydrating) return
@@ -149,46 +205,11 @@ export default function App() {
     setInput('')
     setError('')
     setNotice('')
-    setStatus('正在连接诡计工作台')
-    setStreaming(true)
-    stickRef.current = true
 
     const controller = new AbortController()
     abortRef.current = controller
 
-    try {
-      await streamChat(
-        activeId,
-        text,
-        {
-          onStatus: (label) => setStatus(label),
-          onStage: (value) => setStage(value),
-          onToken: (delta) => {
-            pendingRef.current += delta
-            scheduleFlush()
-          },
-          onNotice: (message) => setNotice(message),
-          onError: (message) => setError(message),
-        },
-        controller.signal,
-      )
-    } catch (err) {
-      if (!controller.signal.aborted) {
-        setError(err instanceof Error ? err.message : '网络异常，请稍后重试。')
-      }
-    } finally {
-      if (flushTimerRef.current !== null) {
-        window.clearTimeout(flushTimerRef.current)
-        flushTimerRef.current = null
-      }
-      flushTokens()
-      setMessages((prev) => prev.filter((item) => item.id !== assistantId || item.content.trim().length > 0))
-      setStreaming(false)
-      setStage('')
-      setStatus('')
-      abortRef.current = null
-      void refreshSessions()
-    }
+    await runStream(controller, assistantId, false, text)
   }
 
   const startNewChat = () => {
@@ -319,6 +340,11 @@ export default function App() {
             {error && (
               <div className="banner banner-error">
                 <span>{error}</span>
+                {!streaming && !loading && (
+                  <button className="banner-action" onClick={() => void retryFromCheckpoint()}>
+                    从断点重试
+                  </button>
+                )}
                 <button onClick={() => setError('')} aria-label="关闭错误提示">
                   关闭
                 </button>
