@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatMessage from './components/ChatMessage'
 import Composer from './components/Composer'
 import ExportBar from './components/ExportBar'
+import ImmersiveView from './components/ImmersiveView'
 import RequirementBuilder from './components/RequirementBuilder'
 import Sidebar from './components/Sidebar'
 import StageProgress from './components/StageProgress'
@@ -31,6 +32,7 @@ export default function App() {
   const [hydrating, setHydrating] = useState(true)
   const [hydratingHistory, setHydratingHistory] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [immersive, setImmersive] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -299,11 +301,22 @@ export default function App() {
             <span className="eyebrow">TRICK STUDIO</span>
             <h1>{headerTitle}</h1>
           </div>
+        <div className="topbar-actions">
+          {hasPlan && !streaming && (
+            <button className="immersive-btn" onClick={() => setImmersive(true)} disabled={loading}>
+              🌙 沉浸模式
+            </button>
+          )}
           <div className={`status-pill ${streaming ? 'live' : ''}`}>
             <span className="dot" />
             {streaming ? status || '生成中' : loading ? '连接中' : '待命中'}
           </div>
-        </header>
+        </div>
+      </header>
+
+      {immersive && hasPlan && (
+        <ImmersiveView conversationId={activeId} onClose={() => setImmersive(false)} />
+      )}
 
         {streaming && <StageProgress stage={stage} />}
 
