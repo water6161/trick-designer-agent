@@ -148,7 +148,7 @@ async def understand(
     writer = get_stream_writer()
     writer({"event": "status", "stage": "understand", "label": "正在解析题材与约束"})
 
-    model = get_model(env, "reason")
+    model = get_model(env, "fast")
     user_text = _last_user_text(state)
 
     payload = {

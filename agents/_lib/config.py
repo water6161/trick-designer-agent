@@ -18,6 +18,7 @@ class EnvConfig:
     api_key: str
     base_url: str
     model: str
+    fast_model: str
     wsa_api_key: str
 
 
@@ -61,9 +62,13 @@ def load_env(env: Any) -> EnvConfig:
         )
     if not base_url.startswith("http"):
         raise ConfigError("AI_GATEWAY_BASE_URL 不是合法的 http(s) 地址。")
+    # 轻量模型用于 understand 等小任务；未配置时退回主模型。
+    fast_model = _env_get(env, "OPENAI_MODEL_FAST") or model
+
     return EnvConfig(
         api_key=api_key,
         base_url=base_url.rstrip("/"),
         model=model,
+        fast_model=fast_model,
         wsa_api_key=wsa_api_key,
     )

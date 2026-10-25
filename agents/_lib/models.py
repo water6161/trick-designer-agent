@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 
 from .config import EnvConfig
 
-ModelKind = Literal["reason", "answer"]
+ModelKind = Literal["reason", "answer", "fast"]
 _models: dict[tuple[str, str, str, str], ChatOpenAI] = {}
 
 
@@ -35,23 +35,26 @@ def init_models(env: EnvConfig) -> None:
 
 
 def get_model(env: EnvConfig, kind: ModelKind) -> ChatOpenAI:
-    key = (env.base_url, env.model, env.api_key, kind)
+    target_model = env.fast_model if kind == "fast" else env.model
+    key = (env.base_url, target_model, env.api_key, kind)
     cached = _models.get(key)
     if cached is not None:
         return cached
 
     common: dict[str, Any] = dict(
-        model=env.model,
+        model=target_model,
         api_key=env.api_key,
         base_url=env.base_url,
-        max_tokens=_max_tokens(env.model),
+        max_tokens=_max_tokens(target_model),
         timeout=300,
         max_retries=1,
-        extra_body=_extra_body(env.model),
+        extra_body=_extra_body(target_model),
     )
 
     if kind == "answer":
         model = ChatOpenAI(temperature=0.72, **common)
+    elif kind == "fast":
+        model = ChatOpenAI(temperature=0.3, **common)
     else:
         model = ChatOpenAI(temperature=0.5, **common)
 
