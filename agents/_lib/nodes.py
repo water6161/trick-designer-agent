@@ -82,8 +82,9 @@ async def _invoke_structured(
     schema: type[BaseModel],
     messages: list[Any],
     timeout: float,
+    max_attempts: int = 2,
 ) -> BaseModel:
-    """通过 function call 取结构化结果，失败时重试一次并做 JSON 兜底解析。"""
+    """通过 function call 取结构化结果，失败时重试并做 JSON 兜底解析。"""
     tool = {
         "type": "function",
         "function": {
@@ -99,7 +100,7 @@ async def _invoke_structured(
     working = list(messages)
 
     last_error: str = ""
-    for attempt in range(2):
+    for attempt in range(max_attempts):
         response = await asyncio.wait_for(bound.ainvoke(working), timeout=timeout)
         calls = getattr(response, "tool_calls", None) or []
         for call in calls:
@@ -116,7 +117,19 @@ async def _invoke_structured(
             if content:
                 last_error = content[:300]
 
-        if attempt == 0:
+        # 诊断日志：失败时记录模型真实返回形态，便于远程定位
+        stop = getattr(response, "response_metadata", {}) or {}
+        logger.error(
+            "structured attempt %d/%d failed: tool_calls=%d content_len=%d stop=%s content_head=%s",
+            attempt + 1,
+            max_attempts,
+            len(calls),
+            len(content),
+            str(stop.get("finish_reason") or stop)[:60],
+            content[:160].replace("\n", " "),
+        )
+
+        if attempt < max_attempts - 1:
             working = list(messages) + [
                 AIMessage(content=content or "（无内容）"),
                 HumanMessage(
@@ -260,7 +273,7 @@ async def design(
     ]
 
     plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeout=300
+        model, DesignPlan, messages, timeout=300, max_attempts=3
     )
     writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
 
