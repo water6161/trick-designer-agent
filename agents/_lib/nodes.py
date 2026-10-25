@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from .config import EnvConfig
 from .amap import extract_place, fetch_weather_note
-from .knowledge import retrieve_knowledge
+from .kb import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
 from .prompts import (
