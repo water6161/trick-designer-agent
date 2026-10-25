@@ -125,7 +125,6 @@ export default function ImmersiveView({ conversationId, onClose }: Props) {
   const timeline = (Array.isArray(plan?.timeline) ? plan!.timeline : []).filter(
     (t) => (t as { visibility?: string }).visibility !== '深入',
   )
-  const culpritName = String((plan?.culprit as { character?: string } | undefined)?.character || '')
 
   return (
     <div className="imm-overlay" role="dialog" aria-label="沉浸模式">
