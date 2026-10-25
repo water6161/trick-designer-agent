@@ -1238,3 +1238,73 @@ textarea {
   font-size: 11.5px;
   color: #8a7a58;
 }
+
+/* ─────────── 阶段进度条 ─────────── */
+.stage-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 20px 0;
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+}
+
+.stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a352a;
+  border: 1px solid #5a5240;
+  flex-shrink: 0;
+}
+
+.stage.active .stage-dot {
+  background: #d8b56a;
+  border-color: #d8b56a;
+  box-shadow: 0 0 8px rgba(216, 181, 106, 0.7);
+  animation: stage-pulse 1.6s ease-in-out infinite;
+}
+
+.stage.done .stage-dot {
+  background: #8a7a58;
+  border-color: #8a7a58;
+}
+
+.stage-line {
+  width: 26px;
+  height: 1px;
+  background: #3a352a;
+  margin: 0 6px;
+}
+
+.stage.done .stage-line {
+  background: #8a7a58;
+}
+
+.stage-label {
+  font-size: 11.5px;
+  color: #6f6545;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+.stage.active .stage-label {
+  color: #d8b56a;
+}
+
+.stage.done .stage-label {
+  color: #8a7a58;
+}
+
+@keyframes stage-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(216, 181, 106, 0.5); }
+  50% { box-shadow: 0 0 12px rgba(216, 181, 106, 0.9); }
+}

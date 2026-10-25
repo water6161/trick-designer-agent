@@ -3,6 +3,7 @@ import ChatMessage from './components/ChatMessage'
 import Composer from './components/Composer'
 import ExportBar from './components/ExportBar'
 import Sidebar from './components/Sidebar'
+import StageProgress from './components/StageProgress'
 import Welcome from './components/Welcome'
 import { MenuIcon } from './components/icons'
 import {
@@ -24,6 +25,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [streaming, setStreaming] = useState(false)
+  const [stage, setStage] = useState('')
   const [hydrating, setHydrating] = useState(true)
   const [hydratingHistory, setHydratingHistory] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -160,6 +162,7 @@ export default function App() {
         text,
         {
           onStatus: (label) => setStatus(label),
+          onStage: (value) => setStage(value),
           onToken: (delta) => {
             pendingRef.current += delta
             scheduleFlush()
@@ -181,6 +184,7 @@ export default function App() {
       flushTokens()
       setMessages((prev) => prev.filter((item) => item.id !== assistantId || item.content.trim().length > 0))
       setStreaming(false)
+      setStage('')
       setStatus('')
       abortRef.current = null
       void refreshSessions()
@@ -278,6 +282,8 @@ export default function App() {
             {streaming ? status || '生成中' : loading ? '连接中' : '待命中'}
           </div>
         </header>
+
+        {streaming && <StageProgress stage={stage} />}
 
         <ExportBar conversationId={activeId} hasPlan={hasPlan && !streaming} disabled={loading} />
 

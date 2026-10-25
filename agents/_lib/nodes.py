@@ -342,6 +342,12 @@ async def compose(
             "genre": brief.get("genre"),
             "lock_score": audit_data.get("lock_score"),
             "source_count": len(research),
+            "brief": {
+                "genre": brief.get("genre"),
+                "players": brief.get("players"),
+                "difficulty": brief.get("difficulty"),
+            },
+            "plan": design or None,
         }
     )
 

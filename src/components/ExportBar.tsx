@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { exportPlan } from '../lib/api'
-import { copyText, downloadCoverPNG, downloadDocx, downloadMarkdown } from '../lib/exporters'
+import type { ExportPlan } from '../lib/api'
+import { copyText, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx } from '../lib/exporters'
 
 interface Props {
   conversationId: string
@@ -12,13 +13,13 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
-  const run = async (task: (markdown: string, meta: { title: string; lockScore: number | null }) => Promise<void> | void) => {
+  const run = async (task: (plan: ExportPlan) => Promise<void> | void) => {
     if (busy || disabled) return
     setBusy(true)
     setMessage('')
     try {
       const plan = await exportPlan(conversationId)
-      await task(plan.markdown, { title: plan.title, lockScore: plan.lockScore })
+      await task(plan)
       setMessage('完成')
     } catch (err) {
       setMessage(err instanceof Error ? err.message : '导出失败，请重试。')
@@ -39,10 +40,12 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
   return (
     <div className="export-bar">
       <span className="export-label">开本稿</span>
-      {btn('复制全文', () => void run((markdown) => { void copyText(markdown) }), 'copy')}
-      {btn('下载 .md', () => void run((markdown, meta) => downloadMarkdown(markdown, meta.title)), 'md')}
-      {btn('下载 Word', () => void run((markdown, meta) => downloadDocx(markdown, meta)), 'docx')}
-      {btn('下载封面', () => void run((_markdown, meta) => downloadCoverPNG(meta)), 'cover')}
+      {btn('复制全文', () => void run((plan) => { void copyText(plan.markdown) }), 'copy')}
+      {btn('下载 Word', () => void run((plan) => downloadDocx(plan.markdown, { title: plan.title, lockScore: plan.lockScore })), 'docx')}
+      {btn('玩家版 Word', () => void run((plan) => downloadPlayerDocx(plan.markdown, { title: plan.title })), 'player')}
+      {btn('线索卡 Word', () => void run((plan) => downloadClueCardsDocx(plan.plan, plan.title)), 'clues')}
+      {btn('下载 .md', () => void run((plan) => downloadMarkdown(plan.markdown, plan.title)), 'md')}
+      {btn('下载封面', () => void run((plan) => downloadCoverPNG({ title: plan.title, lockScore: plan.lockScore })), 'cover')}
       {busy && <span className="export-msg">正在导出…</span>}
       {!busy && message && <span className="export-msg">{message}</span>}
     </div>

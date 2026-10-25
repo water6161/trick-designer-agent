@@ -1,4 +1,5 @@
-import { Packer, Document, Paragraph, HeadingLevel, TextRun, AlignmentType } from 'docx'
+import { Packer, Document, Paragraph, HeadingLevel, TextRun, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx'
+import type { ClueData, PlanData } from '../types'
 
 export interface CoverMeta {
   title: string
@@ -259,4 +260,121 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// ───────────────────────── 玩家版过滤 ─────────────────────────
+
+// 仅保留玩家可见章节；DM 专属章节按标题关键词剔除
+const DM_ONLY_PATTERN = /(凶手|真凶|真相|答案|解析|诡计|手法|红鲱鱼|误导|DM|防杠|易卡壳|深入线索|审查|自查|复盘)/
+
+export function playerMarkdown(markdown: string): string {
+  const lines = markdown.split('\n')
+  const out: string[] = []
+  let dropping = false
+  let dropLevel = 0
+  for (const line of lines) {
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line)
+    if (heading) {
+      if (DM_ONLY_PATTERN.test(heading[2])) {
+        dropping = true
+        dropLevel = heading[1].length
+        continue
+      }
+      if (dropping && heading[1].length <= dropLevel) {
+        dropping = false
+      }
+    }
+    if (!dropping) out.push(line)
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+export function downloadPlayerDocx(markdown: string, meta: CoverMeta): void {
+  const filtered = playerMarkdown(markdown)
+  if (!filtered) throw new Error('未能解析出玩家可见章节，请改用完整版导出。')
+  return void downloadDocx(filtered, { ...meta, lockScore: null })
+}
+
+// ───────────────────────── 线索卡片 Word ─────────────────────────
+
+const CARD_BORDER = { style: BorderStyle.SINGLE, size: 6, color: 'A8823D' }
+
+function clueCard(clue: ClueData): Table {
+  const rows: TableRow[] = []
+  const head = [clue.id, clue.name].filter(Boolean).join('　')
+  const push = (label: string, value?: string) => {
+    if (value && value.trim()) {
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 16, type: WidthType.PERCENTAGE },
+              margins: { top: 80, bottom: 80, left: 120, right: 120 },
+              children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 20, font: 'Noto Serif SC' })] })],
+            }),
+            new TableCell({
+              width: { size: 84, type: WidthType.PERCENTAGE },
+              margins: { top: 80, bottom: 80, left: 120, right: 120 },
+              children: [new Paragraph({ children: [new TextRun({ text: value, size: 20, font: 'Noto Serif SC' })] })],
+            }),
+          ],
+        }),
+      )
+    }
+  }
+  push('线索', head)
+  push('内容', clue.content)
+  push('获取方式', clue.access)
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: CARD_BORDER,
+      bottom: CARD_BORDER,
+      left: CARD_BORDER,
+      right: CARD_BORDER,
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: 'D8B56A' },
+      insideVertical: { style: BorderStyle.SINGLE, size: 2, color: 'D8B56A' },
+    },
+    rows,
+  })
+}
+
+export async function downloadClueCardsDocx(plan: PlanData | null | undefined, title: string): Promise<void> {
+  const clues: ClueData[] = [...(plan?.clues_public || []), ...(plan?.clues_deep || [])]
+  if (clues.length === 0) throw new Error('方案中没有线索数据，请生成完整方案后重试。')
+
+  const children: (Paragraph | Table)[] = [
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 120 },
+      children: [new TextRun({ text: `${title} · 线索卡`, bold: true, size: 44, font: 'Noto Serif SC' })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 240 },
+      children: [
+        new TextRun({
+          text: `共 ${clues.length} 张 · 前半为公开线索，后半为深入搜证线索 · 按虚线裁剪发放`,
+          size: 18,
+          color: '8A7A58',
+          font: 'Noto Serif SC',
+        }),
+      ],
+    }),
+  ]
+
+  clues.forEach((clue, index) => {
+    children.push(clueCard(clue))
+    children.push(
+      new Paragraph({
+        spacing: { before: index === clues.length - 1 ? 0 : 200, after: 200 },
+        border: index === clues.length - 1 ? undefined : { bottom: { style: BorderStyle.DASHED, size: 4, color: 'BBBBBB', space: 8 } },
+        children: [new TextRun({ text: '', size: 8 })],
+      }),
+    )
+  })
+
+  const doc = new Document({ sections: [{ properties: {}, children }] })
+  const blob = await Packer.toBlob(doc)
+  saveBlob(blob, `${title}·线索卡.docx`)
 }

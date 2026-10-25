@@ -361,6 +361,8 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
     best: dict[str, Any] = {}
     title = ""
     lock_score: Any = None
+    plan: Any = None
+    brief: Any = None
     for message in messages or []:
         plain = _to_plain(message)
         if not isinstance(plain, dict) or plain.get("role") != "assistant":
@@ -376,6 +378,9 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
                 title = str(metadata.get("title") or "")
             if lock_score is None and metadata.get("lockScore") is not None:
                 lock_score = metadata.get("lockScore")
+            if metadata.get("plan"):
+                plan = metadata.get("plan")
+                brief = metadata.get("brief")
         if len(text) > len(best.get("markdown", "")):
             best = {"markdown": text}
 
@@ -386,6 +391,8 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
         "title": title or "未命名诡计方案",
         "markdown": best["markdown"],
         "lockScore": lock_score,
+        "brief": brief,
+        "plan": plan,
     }
 
 
@@ -524,18 +531,23 @@ async def handler(context: Any):
         title = str(meta.get("title") or message.replace("\n", " ")[:24] or "未命名剧本")
 
         if answer:
+            metadata: dict[str, Any] = {
+                "source": "web",
+                "title": title,
+                "partial": errored,
+                "lockScore": meta.get("lock_score"),
+            }
+            # 结构化方案随消息持久化，供导出（线索卡/玩家版）使用
+            if meta.get("plan"):
+                metadata["plan"] = meta.get("plan")
+                metadata["brief"] = meta.get("brief") or {}
             await _append_message(
                 store,
                 conversation_id,
                 "assistant",
                 answer,
                 user_id,
-                metadata={
-                    "source": "web",
-                    "title": title,
-                    "partial": errored,
-                    "lockScore": meta.get("lock_score"),
-                },
+                metadata=metadata,
             )
         await _touch_conversation(store, conversation_id, title)
 

@@ -1,4 +1,4 @@
-import type { ChatMessage, DonePayload, MetaPayload, SessionItem, StreamHandlers } from '../types'
+import type { ChatMessage, DonePayload, MetaPayload, PlanBrief, PlanData, SessionItem, StreamHandlers } from '../types'
 
 const CLIENT_ID_KEY = 'trick-designer-client-id'
 const AGENT_URL = '/trick-designer'
@@ -123,6 +123,8 @@ export interface ExportPlan {
   title: string
   markdown: string
   lockScore: number | null
+  brief?: PlanBrief
+  plan?: PlanData | null
 }
 
 export async function exportPlan(conversationId: string): Promise<ExportPlan> {
@@ -138,6 +140,8 @@ export async function exportPlan(conversationId: string): Promise<ExportPlan> {
     title: typeof data.title === 'string' && data.title ? data.title : '未命名诡计方案',
     markdown,
     lockScore: typeof data.lockScore === 'number' ? data.lockScore : null,
+    brief: (data.brief && typeof data.brief === 'object' ? data.brief : undefined) as PlanBrief | undefined,
+    plan: (data.plan && typeof data.plan === 'object' ? data.plan : null) as PlanData | null,
   }
 }
 
@@ -218,6 +222,8 @@ function handleEvent(event: string, data: unknown, handlers: StreamHandlers): vo
     case 'status': {
       const label = payload.label
       if (typeof label === 'string' && label) handlers.onStatus?.(label)
+      const stage = payload.stage
+      if (typeof stage === 'string' && stage) handlers.onStage?.(stage)
       break
     }
     case 'token': {
