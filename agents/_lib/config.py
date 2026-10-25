@@ -38,20 +38,19 @@ def _env_get(env: Any, key: str) -> str:
 
 
 def load_env(env: Any) -> EnvConfig:
-    api_key = _env_get(env, "AI_GATEWAY_API_KEY")
-    base_url = _env_get(env, "AI_GATEWAY_BASE_URL") or DEFAULT_BASE_URL
-    model = _env_get(env, "AI_GATEWAY_MODEL") or DEFAULT_MODEL
+    # 自备 OpenAI 兼容服务（如阿里云 DashScope）优先：
+    # 平台的 AI_GATEWAY_* 为保留变量，控制台修改会被重置，因此提供 OPENAI_* 覆盖通道。
+    fallback_key = _env_get(env, "OPENAI_API_KEY")
+    fallback_base = _env_get(env, "OPENAI_BASE_URL")
+    fallback_model = _env_get(env, "OPENAI_MODEL")
 
-    # 网关密钥缺失时，回退到 OpenAI 兼容的自备模型服务
-    # （如阿里云 DashScope compatible-mode：OPENAI_BASE_URL / OPENAI_MODEL / OPENAI_API_KEY）
-    if not api_key:
-        fallback_key = _env_get(env, "OPENAI_API_KEY")
-        fallback_base = _env_get(env, "OPENAI_BASE_URL")
-        fallback_model = _env_get(env, "OPENAI_MODEL")
-        if fallback_key:
-            api_key = fallback_key
-            base_url = fallback_base or DEFAULT_BASE_URL
-            model = fallback_model or DEFAULT_MODEL
+    api_key = fallback_key or _env_get(env, "AI_GATEWAY_API_KEY")
+    base_url = (
+        fallback_base
+        or _env_get(env, "AI_GATEWAY_BASE_URL")
+        or DEFAULT_BASE_URL
+    )
+    model = fallback_model or _env_get(env, "AI_GATEWAY_MODEL") or DEFAULT_MODEL
 
     # 当前联网搜索走平台内置 web_search，WSA_API_KEY 仅读取备用，不参与硬编码。
     wsa_api_key = _env_get(env, "WSA_API_KEY")
