@@ -1741,3 +1741,128 @@ textarea {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ─────────── 沉浸模式 · 寒夜蓝×血色红 恐怖主题 ─────────── */
+.imm-overlay {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(30, 58, 95, 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 120%, rgba(90, 12, 18, 0.35) 0%, transparent 50%),
+    linear-gradient(180deg, #060a14 0%, #04060c 100%);
+}
+
+.imm-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(2, 4, 9, 0.85) 100%);
+}
+
+.imm-body {
+  position: relative;
+  z-index: 1;
+}
+
+.imm-eyebrow {
+  color: #5f7fa3;
+}
+
+.imm-stage-label {
+  color: #5f7fa3;
+}
+
+.imm-title {
+  color: #c9dcf0;
+  text-shadow: 0 0 22px rgba(80, 130, 190, 0.35), 0 0 60px rgba(20, 40, 80, 0.5);
+  animation: imm-flicker 6s infinite;
+}
+
+.imm-tagline {
+  color: #7d97b5;
+}
+
+.imm-heading {
+  color: #8fb8dd;
+  text-shadow: 0 0 16px rgba(70, 120, 180, 0.4);
+}
+
+.imm-para {
+  color: #aebfd4;
+}
+
+.imm-btn {
+  background: linear-gradient(135deg, #7e1416, #4d0a0e);
+  color: #f0d9d9;
+  box-shadow: 0 0 18px rgba(126, 20, 22, 0.45);
+  border: 1px solid rgba(200, 60, 60, 0.5);
+}
+
+.imm-btn:hover {
+  filter: brightness(1.25);
+  box-shadow: 0 0 26px rgba(160, 30, 34, 0.65);
+}
+
+.imm-card,
+.imm-clue {
+  border-color: rgba(95, 140, 190, 0.35);
+  background: linear-gradient(160deg, rgba(40, 70, 110, 0.14), rgba(10, 18, 32, 0.3));
+}
+
+.imm-clue {
+  border-color: rgba(95, 140, 190, 0.4);
+}
+
+.imm-clue.flipped {
+  background: linear-gradient(160deg, rgba(110, 18, 24, 0.25), rgba(20, 34, 58, 0.3));
+  border-color: rgba(200, 60, 60, 0.6);
+}
+
+.imm-clue strong {
+  color: #e08a8a;
+}
+
+.imm-clue-back {
+  color: #5f7fa3;
+}
+
+.imm-tl-item {
+  border-left-color: #7e1416;
+}
+
+.imm-tl-time {
+  color: #c9dcf0;
+}
+
+.imm-tl-event {
+  color: #aebfd4;
+}
+
+.imm-nav button,
+.imm-close {
+  border-color: rgba(95, 140, 190, 0.35);
+  color: #7d97b5;
+}
+
+.imm-nav button:hover:not(:disabled),
+.imm-close:hover {
+  border-color: #c0392b;
+  color: #e08a8a;
+}
+
+.imm-top,
+.imm-nav {
+  position: relative;
+  z-index: 2;
+}
+
+@keyframes imm-flicker {
+  0%, 100% { opacity: 1; }
+  3% { opacity: 0.82; }
+  5% { opacity: 1; }
+  42% { opacity: 1; }
+  44% { opacity: 0.7; }
+  46% { opacity: 0.95; }
+  48% { opacity: 1; }
+  77% { opacity: 0.9; }
+  79% { opacity: 1; }
+}
