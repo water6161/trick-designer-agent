@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ChatMessage from './components/ChatMessage'
 import Composer from './components/Composer'
 import ExportBar from './components/ExportBar'
+import RequirementBuilder from './components/RequirementBuilder'
 import Sidebar from './components/Sidebar'
 import StageProgress from './components/StageProgress'
 import Welcome from './components/Welcome'
@@ -307,6 +308,14 @@ export default function App() {
         {streaming && <StageProgress stage={stage} />}
 
         <ExportBar conversationId={activeId} hasPlan={hasPlan && !streaming} disabled={loading} />
+
+        {!streaming && !loading && (
+          <RequirementBuilder
+            onSend={(text) => void send(text)}
+            hasPlan={messages.some((item) => item.role === 'assistant' && item.content.length > 200)}
+            disabled={loading}
+          />
+        )}
 
         <div className="chat-scroll" ref={scrollRef} onScroll={() => {
           const container = scrollRef.current

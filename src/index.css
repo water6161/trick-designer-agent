@@ -1323,3 +1323,125 @@ textarea {
 .banner-action:hover {
   background: rgba(216, 181, 106, 0.25);
 }
+
+/* ─────────── 需求构造器 / 迭代快捷指令 ─────────── */
+.req-builder {
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 8px 20px 0;
+  box-sizing: border-box;
+}
+
+.req-builder-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.req-chip {
+  background: rgba(216, 181, 106, 0.06);
+  border: 1px solid rgba(216, 181, 106, 0.3);
+  color: #bfae87;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.req-chip:hover:not(:disabled) {
+  border-color: rgba(216, 181, 106, 0.6);
+  color: #d8b56a;
+}
+
+.req-chip.active {
+  background: rgba(216, 181, 106, 0.2);
+  border-color: #d8b56a;
+  color: #efe6cf;
+}
+
+.req-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.req-panel {
+  margin-top: 8px;
+  border: 1px solid rgba(216, 181, 106, 0.25);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(20, 18, 14, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.req-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.req-label {
+  font-size: 11.5px;
+  color: #8a7a58;
+  width: 34px;
+  flex-shrink: 0;
+  letter-spacing: 2px;
+}
+
+.req-input {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(216, 181, 106, 0.25);
+  border-radius: 8px;
+  color: #efe6cf;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.req-input:focus {
+  border-color: rgba(216, 181, 106, 0.6);
+}
+
+.req-footer {
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.req-preview {
+  font-size: 11px;
+  color: #6f6545;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 10px;
+}
+
+.req-generate {
+  background: linear-gradient(135deg, #d8b56a, #a8823d);
+  border: none;
+  color: #14120e;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.req-generate:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.req-generate:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
