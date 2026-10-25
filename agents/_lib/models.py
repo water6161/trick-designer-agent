@@ -23,6 +23,11 @@ def _extra_body(model: str) -> dict[str, Any] | None:
     return None
 
 
+def _max_tokens(model: str) -> int:
+    """平台网关可用 16000；第三方 OpenAI 兼容服务（如 qwen-plus）输出上限一般 8192。"""
+    return 16000 if model.startswith("@makers/") else 8000
+
+
 def init_models(env: EnvConfig) -> None:
     """预热并缓存模型实例；切换模型只需改 AI_GATEWAY_MODEL。"""
     for kind in ("reason", "answer"):
@@ -35,28 +40,20 @@ def get_model(env: EnvConfig, kind: ModelKind) -> ChatOpenAI:
     if cached is not None:
         return cached
 
+    common: dict[str, Any] = dict(
+        model=env.model,
+        api_key=env.api_key,
+        base_url=env.base_url,
+        max_tokens=_max_tokens(env.model),
+        timeout=300,
+        max_retries=1,
+        extra_body=_extra_body(env.model),
+    )
+
     if kind == "answer":
-        model = ChatOpenAI(
-            model=env.model,
-            api_key=env.api_key,
-            base_url=env.base_url,
-            temperature=0.72,
-            max_tokens=16000,
-            timeout=300,
-            max_retries=1,
-            extra_body=_extra_body(env.model),
-        )
+        model = ChatOpenAI(temperature=0.72, **common)
     else:
-        model = ChatOpenAI(
-            model=env.model,
-            api_key=env.api_key,
-            base_url=env.base_url,
-            temperature=0.5,
-            max_tokens=16000,
-            timeout=300,
-            max_retries=1,
-            extra_body=_extra_body(env.model),
-        )
+        model = ChatOpenAI(temperature=0.5, **common)
 
     _models[key] = model
     return model
