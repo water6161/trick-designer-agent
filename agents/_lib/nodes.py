@@ -12,6 +12,7 @@ from langgraph.config import get_stream_writer
 from pydantic import BaseModel, ValidationError
 
 from .config import EnvConfig
+from .knowledge import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
 from .prompts import (
@@ -229,6 +230,7 @@ async def design(
     payload = {
         "需求": brief,
         "本轮改动": brief.get("modifications") or [],
+        "本地知识库参考（精选诡计/结构整理，可引用思路但不要照抄）": retrieve_knowledge(brief),
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:12]
