@@ -95,6 +95,10 @@ class DesignPlan(BaseModel):
     anti_argument: list[str]
     player_traps: list[str]
     iteration_hooks: list[str] = Field(description="后续可加的难度/反转方向。")
+    self_audit: FairnessAudit | None = Field(
+        default=None,
+        description="完成方案后立即做公平性自查并填入：锁凶充分性评分、是否降智、其他解释与修复建议。填了此字段系统将跳过独立审查以提速。",
+    )
 
 
 class AuditIssue(BaseModel):

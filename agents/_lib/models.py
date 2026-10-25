@@ -24,8 +24,8 @@ def _extra_body(model: str) -> dict[str, Any] | None:
 
 
 def _max_tokens(model: str) -> int:
-    """输出上限统一 16000（qwen-plus 等第三方兼容服务实测可接受）。"""
-    return 16000
+    """qwen-flash 输出上限 8192，其余统一 16000。"""
+    return 8192 if "flash" in model.lower() else 16000
 
 
 def init_models(env: EnvConfig) -> None:

@@ -232,6 +232,7 @@ async def design(
     writer = get_stream_writer()
     writer({"event": "status", "stage": "design", "label": "正在搭建核心诡计与线索链"})
 
+    # 极速模式=精简输出（实测 54s 出全套含自查）；flash/turbo 撑不起大 JSON，不用
     model = get_model(env, "reason")
     brief = state.get("brief") or {}
     previous = state.get("design") or {}
@@ -241,6 +242,11 @@ async def design(
         "需求": brief,
         "本轮改动": brief.get("modifications") or [],
         "本地知识库参考（精选诡计/结构整理，可引用思路但不要照抄）": retrieve_knowledge(brief),
+        "输出要求": (
+            "除完整方案外，必须在 self_audit 字段中一并完成公平性自查（锁凶充分性评分、降智检查、其他解释排除、必修问题）。"
+            + ("【极速模式】方案务必精简：公开线索3条、深入线索2条、时间线4条、角色4人，每条内容一两句话点到为止。"
+               if _speed_mode(state) else "")
+        ),
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:12]
@@ -254,10 +260,15 @@ async def design(
     ]
 
     plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeout=260
+        model, DesignPlan, messages, timeout=300
     )
     writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
-    return {"design": plan.model_dump()}
+
+    updates: dict[str, Any] = {"design": plan.model_dump()}
+    if plan.self_audit is not None:
+        # 自查已随设计一次完成，audit 节点直接复用，省一轮模型调用
+        updates["audit"] = plan.self_audit.model_dump()
+    return updates
 
 
 async def audit(
@@ -266,10 +277,21 @@ async def audit(
     writer = get_stream_writer()
     writer({"event": "status", "stage": "audit", "label": "正在做公平性自查"})
 
-    model = get_model(env, "reason")
     plan = state.get("design") or {}
     brief = state.get("brief") or {}
 
+    # design 阶段已附带自查结果时直接复用，不再调用模型
+    preset = state.get("audit") or {}
+    if preset and not preset.get("failed") and preset.get("lock_score") is not None:
+        writer(
+            {
+                "event": "notice",
+                "message": f"公平性自查已随设计完成：锁凶充分性 {preset.get('lock_score')}/100。",
+            }
+        )
+        return {"audit": preset}
+
+    model = get_model(env, "reason")
     payload = {
         "需求": brief,
         "待审方案": plan,
@@ -393,3 +415,8 @@ async def compose(
 
 def after_understand(state: AgentState) -> str:
     return "compose" if state.get("qa") else "research"
+
+
+def _speed_mode(state: AgentState) -> bool:
+    """用户消息含【极速模式】标记时，设计与自查改用轻量模型，大幅提速。"""
+    return "极速" in _last_user_text(state)

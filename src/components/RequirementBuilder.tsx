@@ -28,6 +28,7 @@ interface BuilderState {
   difficulty: string
   tricks: string[]
   mood: string
+  speed: boolean
 }
 
 function loadSaved(): BuilderState {
@@ -41,12 +42,13 @@ function loadSaved(): BuilderState {
         difficulty: typeof parsed.difficulty === 'string' ? parsed.difficulty : '',
         tricks: Array.isArray(parsed.tricks) ? parsed.tricks.filter((t) => typeof t === 'string') : [],
         mood: typeof parsed.mood === 'string' ? parsed.mood : '',
+        speed: parsed.speed === true,
       }
     }
   } catch {
     // 忽略损坏的本地数据
   }
-  return { genre: '', players: '', difficulty: '', tricks: [], mood: '' }
+  return { genre: '', players: '', difficulty: '', tricks: [], mood: '', speed: false }
 }
 
 function pick<T>(items: T[]): T {
@@ -68,6 +70,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
 
   const message = useMemo(() => {
     const parts: string[] = []
+    if (state.speed) parts.push('【极速模式】')
     if (state.genre) parts.push(`题材：${state.genre}`)
     if (state.players) parts.push(`人数：${state.players}`)
     if (state.difficulty) parts.push(`难度：${state.difficulty}`)
@@ -101,13 +104,14 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
   }
 
   const randomize = () => {
-    setState({
+    setState((prev) => ({
+      ...prev,
       genre: pick(GENRES),
       players: pick(PLAYER_OPTIONS),
       difficulty: pick(DIFFICULTIES),
       tricks: [pick(TRICKS), pick(TRICKS)].filter((v, i, arr) => arr.indexOf(v) === i),
       mood: Math.random() > 0.4 ? pick(MOODS) : '',
-    })
+    }))
     setOpen(true)
   }
 
@@ -172,6 +176,15 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
           </div>
           <div className="req-row req-footer">
             <span className="req-preview">{canBuild ? message : '选择任意条件后即可生成'}</span>
+            <button
+              type="button"
+              className={`req-chip ${state.speed ? 'active' : ''}`}
+              onClick={() => setState((prev) => ({ ...prev, speed: !prev.speed }))}
+              disabled={disabled}
+              title="精简输出模式：约 1 分钟出全套方案（含自查），线索与角色数量精简；关闭则完整详版约 3 分钟"
+            >
+              ⚡ 极速模式 {state.speed ? '开' : '关'}
+            </button>
             <button
               type="button"
               className="req-generate"
