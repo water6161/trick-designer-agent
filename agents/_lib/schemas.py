@@ -122,7 +122,7 @@ class DigestTimeline(BaseModel):
     time: str
     event: str
     witness: str = Field(default="", description="可验证方式/证人。")
-    visibility: Literal["公开", "深入"] = "公开"
+    visibility: str = Field(default="公开", description='只能是「公开」或「深入」，不要写其他文字。')
 
 
 class PlanDigest(BaseModel):

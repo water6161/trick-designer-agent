@@ -251,50 +251,139 @@ async def research(
     return {"research": results}
 
 
+DESIGN_PARTS = [
+    {
+        "no": 1,
+        "title": "标题·速览·背景·核心诡计",
+        "ask": "现在写【第一部分】：从「# 《标题》」开始，到「## 三、核心诡计」整节结束（含现实不可复刻说明）。只输出这一部分。",
+        "label": "正在搭建核心诡计（1/3）",
+    },
+    {
+        "no": 2,
+        "title": "凶手·角色·线索清单",
+        "ask": "现在写【第二部分】：从「## 四、凶手与人物逻辑」开始，到「## 五、线索清单」整节结束（公开线索+深入线索两张表）。只输出这一部分。",
+        "label": "正在铺开人物与线索（2/3）",
+    },
+    {
+        "no": 3,
+        "title": "时间线·自查·DM 提示",
+        "ask": "现在写【第三部分】：从「## 六、时间线」开始，到「## 十、可迭代方向」与创作声明结束。只输出这一部分。",
+        "label": "正在收尾时间线与自查（3/3）",
+    },
+]
+
+
+async def _stream_part(
+    model: Any,
+    base_payload: str,
+    part: dict[str, Any],
+    writer: Any,
+    timeouts: list[float],
+    deadline: float | None = None,
+) -> str:
+    """单段流式生成：独立超时、独立重试，超时时已输出的内容保留。"""
+    for attempt, budget in enumerate(timeouts):
+        if deadline is not None:
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining < 20:
+                logger.error("design part %s skipped: global deadline exhausted", part["no"])
+                break
+            timeout = min(budget, remaining)
+        else:
+            timeout = budget
+        lean = attempt > 0
+        messages = [
+            SystemMessage(content=DESIGN_STREAM_SYSTEM),
+            HumanMessage(
+                content=(
+                    base_payload
+                    + "\n"
+                    + part["ask"]
+                    + ("【时间有限，本部分务必精简，每条一两句话点到为止。】" if lean else "")
+                )
+            ),
+        ]
+        parts: list[str] = []
+
+        async def _consume() -> None:
+            async for chunk in model.astream(messages):
+                delta = _text(getattr(chunk, "content", ""))
+                if delta:
+                    parts.append(delta)
+                    writer({"event": "token", "delta": delta})
+
+        try:
+            await asyncio.wait_for(_consume(), timeout=timeout)
+            text = "".join(parts).strip()
+            if len(text) >= 120:
+                return text
+            logger.error("design part %s too short (%d chars)", part["no"], len(text))
+        except TimeoutError:
+            logger.error("design part %s attempt %d timed out after %.0fs", part["no"], attempt + 1, timeout)
+        # 超时/过短：已流出的内容保留在页面上，下轮重试只补写本段
+        if parts:
+            writer({"event": "token", "delta": "\n\n"})
+        if attempt < len(timeouts) - 1:
+            continue
+    # 兜底：本段失败不拖垮整个方案
+    writer(
+        {
+            "event": "notice",
+            "message": f"「{part['title']}」部分生成超时已跳过，其余部分不受影响；你可以直接让我补写这一节。",
+        }
+    )
+    return f"## 待补充：{part['title']}\n（本节生成超时，请回复「补写 {part['no']}」让我补上。）"
+
+
 async def design(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
-    """流式设计：直接产出完整 Markdown 方案，token 实时推给用户（不再生成大 JSON）。"""
+    """分段流式设计：方案拆 3 段独立生成，任何一段超时只丢一段，不再整体卡死。"""
     writer = get_stream_writer()
-    writer({"event": "status", "stage": "design", "label": "正在搭建核心诡计与线索链"})
+    writer({"event": "status", "stage": "design", "label": "正在分段生成完整方案"})
 
     model = get_model(env, "reason")
     brief = state.get("brief") or {}
     previous_markdown = state.get("design_markdown") or ""
     research = state.get("research") or []
+    speed = _speed_mode(state)
 
     payload = {
         "需求": brief,
         "本轮改动": brief.get("modifications") or [],
-        "本地知识库参考（精选诡计/结构整理，可引用思路但不要照抄）": retrieve_knowledge(brief),
-        "输出要求": (
-            "直接流式输出完整 Markdown 方案，第一行就是《标题》，不要任何开场白。"
-            + ("【极速模式】全文精简：公开线索4条、深入线索3条、时间线4条、角色4人，每条内容一两句话点到为止，其余章节同样压缩。"
-               if _speed_mode(state) else "")
-        ),
+        "本地知识库参考（可引用思路但不要照抄）": retrieve_knowledge(brief),
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
-            for item in research[:12]
+            for item in research[:10]
         ],
-        "上一版方案全文（迭代时在它基础上修改，为空表示全新创作）": previous_markdown[:8000] or None,
+        "上一版方案相关段落（迭代时在它基础上修改，为空表示全新创作）": previous_markdown[:6000] or None,
         "本轮用户原话": _last_user_text(state),
+        "输出基调": (
+            "【极速模式】全文精简：公开线索4条、深入线索3条、时间线4条、角色4人，每条一两句话点到为止。"
+            if speed
+            else "内容完整：公开线索6~8条、深入线索5~6条、时间线5条左右、角色5~6人。"
+        ),
     }
-    messages = [
-        SystemMessage(content=DESIGN_STREAM_SYSTEM),
-        HumanMessage(content=_json(payload)),
-    ]
+    base_payload = _json(payload)
 
-    parts: list[str] = []
-    async for chunk in model.astream(messages):
-        delta = _text(getattr(chunk, "content", ""))
-        if not delta:
-            continue
-        parts.append(delta)
-        writer({"event": "token", "delta": delta})
+    chunks: list[str] = []
+    # 全局预算：给 extract 与成稿留出 ≥80s，避免三段都慢时撞平台 300s 硬上限
+    deadline = asyncio.get_running_loop().time() + (195 if not speed else 165)
+    for part in DESIGN_PARTS:
+        writer({"event": "status", "stage": "design", "label": part["label"]})
+        text = await _stream_part(
+            model,
+            base_payload,
+            part,
+            writer,
+            timeouts=[115, 85] if not speed else [95, 70],
+            deadline=deadline,
+        )
+        chunks.append(text)
 
-    markdown = "".join(parts).strip()
+    markdown = "\n\n".join(chunks).strip()
     if len(markdown) < 200:
-        raise RuntimeError(f"方案正文过短（{len(markdown)} 字符），模型可能未正常输出，请重试。")
+        raise RuntimeError("方案正文过短，模型可能未正常输出，请重试。")
 
     writer({"event": "status", "stage": "designed", "label": "方案正文已完成"})
     return {"design_markdown": markdown}
