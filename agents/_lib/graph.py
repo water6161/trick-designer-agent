@@ -33,7 +33,7 @@ def build_graph(
     builder.add_conditional_edges(
         "understand",
         after_understand,
-        {"research": "research", "compose": "compose"},
+        {"research": "research", "compose": "compose", "ask": END},
     )
     builder.add_edge("research", "design")
     builder.add_edge("design", "extract")

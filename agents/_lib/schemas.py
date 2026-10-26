@@ -152,6 +152,12 @@ class PlanDigest(BaseModel):
     must_fix: list[str] = Field(default_factory=list, description="必修问题，每条一句话。")
 
 
+class QuickQuestions(BaseModel):
+    """出方案前的关键追问（最多 3 个）。"""
+
+    questions: list[str] = Field(description="2~3 个关键问题，每个一句话，帮助锁定方案方向。")
+
+
 class AuditIssue(BaseModel):
     severity: Literal["high", "medium", "low"]
     category: str

@@ -18,5 +18,7 @@ class AgentState(TypedDict, total=False):
     audit: dict[str, Any]
     intent: str
     qa: bool
+    pending: bool  # True=已向用户提出追问，等待回答
+    mode: str  # ""=正常；"compare"=本轮输出多方案对比；"compared"=已对比，等用户选方向
     title: str
     user_id: str

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -21,9 +22,10 @@ from .prompts import (
     COMPOSE_SYSTEM,
     DESIGN_STREAM_SYSTEM,
     EXTRACT_SYSTEM,
+    PROBE_SYSTEM,
     UNDERSTAND_SYSTEM,
 )
-from .schemas import BriefPatch, PlanDigest
+from .schemas import BriefPatch, PlanDigest, QuickQuestions
 from .search import build_queries, run_searches
 from .state import AgentState
 
@@ -207,7 +209,31 @@ async def understand(
 
     intent = patch.intent
     qa = intent == "question"
-    updates: dict[str, Any] = {"brief": brief, "intent": intent, "qa": qa}
+    updates: dict[str, Any] = {"brief": brief, "intent": intent, "qa": qa, "pending": False}
+
+    # 上一轮发了追问：本轮用户输入即回答，附进需求后正常出方案
+    if state.get("pending"):
+        brief["answers"] = user_text
+        updates["brief"] = brief
+
+    # 上一轮给了多方案对比：本轮输入是选方向
+    if state.get("mode") == "compared":
+        brief["compare_pick"] = user_text
+        brief["answers"] = user_text  # 选向即视为已回应追问，不再二次追问
+        updates["brief"] = brief
+        updates["mode"] = ""
+        intent = "new" if not state.get("design") else intent
+        qa = False
+        updates["intent"] = intent
+        updates["qa"] = False
+
+    # 首次出方案且要求多方案对比：进入对比模式
+    if (
+        intent == "new"
+        and not state.get("design")
+        and re.search(r"对比|多方案|几个方向|多给几个", user_text)
+    ):
+        updates["mode"] = "compare"
 
     # 用户明确要求推翻重做时，清掉旧方案，避免模型被上一版锚定
     if intent == "new" and state.get("design"):
@@ -215,6 +241,38 @@ async def understand(
         updates["audit"] = {}
         updates["research"] = []
         updates["design_markdown"] = ""
+
+    # 首次出完整方案且信息有空白时，先追问 2~3 个关键问题（回答后一次到位）
+    if (
+        intent == "new"
+        and not state.get("design")
+        and updates.get("mode") != "compare"
+        and not state.get("pending")
+        and not brief.get("answers")
+    ):
+        try:
+            probe: QuickQuestions = await _invoke_structured(  # type: ignore[assignment]
+                model,
+                QuickQuestions,
+                [
+                    SystemMessage(content=PROBE_SYSTEM),
+                    HumanMessage(content=_json({"需求": brief, "本轮用户输入": user_text})),
+                ],
+                timeouts=[30, 20],
+            )
+            questions = [q.strip() for q in probe.questions if q.strip()][:3]
+            if questions:
+                lines = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+                for delta in (
+                    "为了让方案一次到位，先和你确认几个关键点：\n\n"
+                    f"{lines}\n\n直接回答即可，也可以说「直接生成」让我自行决定。"
+                ):
+                    writer({"event": "token", "delta": delta})
+                updates["pending"] = True
+                writer({"event": "status", "stage": "understood", "label": "已提出追问，等待回答"})
+                return updates
+        except Exception as exc:  # noqa: BLE001 - 追问失败不阻断主流程
+            logger.exception("probe failed", exc)
 
     writer({"event": "status", "stage": "understood", "label": "需求已确认"})
     return updates
@@ -357,6 +415,8 @@ async def design(
             for item in research[:10]
         ],
         "上一版方案相关段落（迭代时在它基础上修改，为空表示全新创作）": previous_markdown[:6000] or None,
+        "用户对追问的回答（追问器上轮提的问题）": brief.get("answers") or None,
+        "用户选择的方向（多方案对比后的选择）": brief.get("compare_pick") or None,
         "本轮用户原话": _last_user_text(state),
         "输出基调": (
             "【极速模式·大框架】只出骨架，不铺陈：速览表只 1 行；背景 2 句；手法拆解 3 步每步一句话；"
@@ -367,6 +427,39 @@ async def design(
         ),
     }
     base_payload = _json(payload)
+
+    # 多方案对比模式：一次给出 2~3 个截然不同的诡计方向，用户选一个后再展开
+    if state.get("mode") == "compare":
+        writer({"event": "status", "stage": "design", "label": "正在构思多个诡计方向"})
+        compare_messages = [
+            SystemMessage(content=DESIGN_STREAM_SYSTEM),
+            HumanMessage(
+                content=(
+                    base_payload
+                    + "\n\n本次任务是【多方案对比】：给出 2~3 个截然不同的诡计方向（如密室方向 / 叙诡方向 / 身份方向）。"
+                    "每个方向包含：方向代号（A/B/C）、《暂定标题》、一句话卖点、核心诡计 3 步简述、最大亮点、最大风险，"
+                    "每个方向 150 字以内。最后单独一行提示：「回复 A / B / C 选择方向，我会沿该方向展开完整方案」。"
+                    "不要输出其他章节。"
+                )
+            ),
+        ]
+        parts: list[str] = []
+        try:
+            async def _consume_compare() -> None:
+                async for chunk in model.astream(compare_messages):
+                    delta = _text(getattr(chunk, "content", ""))
+                    if delta:
+                        parts.append(delta)
+                        writer({"event": "token", "delta": delta})
+
+            await asyncio.wait_for(_consume_compare(), timeout=110)
+        except TimeoutError:
+            logger.error("compare generation timed out")
+        comparison = "".join(parts).strip()
+        if len(comparison) < 100:
+            raise RuntimeError("多方案对比生成失败，请重试。")
+        writer({"event": "status", "stage": "designed", "label": "对比方案已给出，等待选择"})
+        return {"design_markdown": comparison, "design": {}, "audit": {}, "mode": "compared"}
 
     chunks: list[str] = []
     # 全局预算：给 extract 与成稿留出 ≥80s，避免三段都慢时撞平台 300s 硬上限
@@ -399,6 +492,11 @@ async def extract(
     提取失败不阻断交付：Markdown 正文已经展示给用户，只少了结构化卡片。
     """
     writer = get_stream_writer()
+
+    # 多方案对比轮没有正式方案，跳过提取
+    if state.get("mode") == "compared":
+        return {"design": {}, "audit": {}}
+
     writer({"event": "status", "stage": "extract", "label": "正在提取线索卡与人物档案"})
 
     markdown = state.get("design_markdown") or ""
@@ -553,6 +651,8 @@ async def compose(
 
 
 def after_understand(state: AgentState) -> str:
+    if state.get("pending"):
+        return "ask"
     return "compose" if state.get("qa") else "research"
 
 

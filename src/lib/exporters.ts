@@ -489,64 +489,74 @@ export function downloadPlayerDocx(markdown: string, meta: CoverMeta): void {
 
 // ───────────────────────── 线索卡片 Word ─────────────────────────
 
-const CARD_BORDER = { style: BorderStyle.SINGLE, size: 6, color: 'A8823D' }
-
-function clueCard(clue: ClueData): Table {
-  const rows: TableRow[] = []
-  const head = [clue.id, clue.name].filter(Boolean).join('　')
-  const push = (label: string, value?: string) => {
-    if (value && value.trim()) {
-      rows.push(
-        new TableRow({
-          children: [
-            new TableCell({
-              width: { size: 16, type: WidthType.PERCENTAGE },
-              margins: { top: 80, bottom: 80, left: 120, right: 120 },
-              children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 20, font: 'Noto Serif SC' })] })],
-            }),
-            new TableCell({
-              width: { size: 84, type: WidthType.PERCENTAGE },
-              margins: { top: 80, bottom: 80, left: 120, right: 120 },
-              children: [new Paragraph({ children: [new TextRun({ text: value, size: 20, font: 'Noto Serif SC' })] })],
-            }),
-          ],
-        }),
-      )
-    }
-  }
-  push('线索', head)
-  push('内容', clue.content)
-  push('获取方式', clue.access)
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top: CARD_BORDER,
-      bottom: CARD_BORDER,
-      left: CARD_BORDER,
-      right: CARD_BORDER,
-      insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: 'D8B56A' },
-      insideVertical: { style: BorderStyle.SINGLE, size: 2, color: 'D8B56A' },
-    },
-    rows,
-  })
-}
-
+/** 扑克牌式线索卡：A4 每页 2×3 共 6 张，虚线为裁切线，打印裁开即用。 */
 export async function downloadClueCardsDocx(plan: PlanData | null | undefined, title: string): Promise<void> {
   const clues: ClueData[] = [...(plan?.clues_public || []), ...(plan?.clues_deep || [])]
   if (clues.length === 0) throw new Error('方案中没有线索数据，请生成完整方案后重试。')
 
+  const cut = { style: BorderStyle.DASHED, size: 4, color: 'BBBBBB' }
+  const cellMargins = { top: 140, bottom: 140, left: 180, right: 180 }
+
+  const cardCell = (clue: ClueData): TableCell => {
+    const paras: Paragraph[] = []
+    const head = [clue.id, clue.name].filter(Boolean).join('　')
+    paras.push(
+      new Paragraph({
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: head || '线索', bold: true, size: 26, color: '7E1416', font: 'Noto Serif SC' }),
+        ],
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: 'A8823D', space: 4 } },
+      }),
+    )
+    if (clue.content) {
+      paras.push(
+        new Paragraph({
+          spacing: { after: 80, line: 300 },
+          children: [new TextRun({ text: clue.content, size: 19, font: 'Noto Serif SC' })],
+        }),
+      )
+    }
+    if (clue.points_to) {
+      paras.push(
+        new Paragraph({
+          spacing: { after: 40 },
+          children: [
+            new TextRun({ text: '指向　', bold: true, size: 16, color: 'A8823D', font: 'Noto Serif SC' }),
+            new TextRun({ text: clue.points_to, size: 16, color: '555555', font: 'Noto Serif SC' }),
+          ],
+        }),
+      )
+    }
+    if (clue.access) {
+      paras.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: '获取　', bold: true, size: 16, color: 'A8823D', font: 'Noto Serif SC' }),
+            new TextRun({ text: clue.access, size: 16, color: '555555', font: 'Noto Serif SC' }),
+          ],
+        }),
+      )
+    }
+    return new TableCell({
+      margins: cellMargins,
+      borders: { top: cut, bottom: cut, left: cut, right: cut },
+      children: paras,
+    })
+  }
+
   const children: (Paragraph | Table)[] = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 120 },
-      children: [new TextRun({ text: `${title} · 线索卡`, bold: true, size: 44, font: 'Noto Serif SC' })],
+      spacing: { after: 80 },
+      children: [new TextRun({ text: `${title} · 线索卡`, bold: true, size: 40, font: 'Noto Serif SC' })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 240 },
+      spacing: { after: 200 },
       children: [
         new TextRun({
-          text: `共 ${clues.length} 张 · 前半为公开线索，后半为深入搜证线索 · 按虚线裁剪发放`,
+          text: `共 ${clues.length} 张 · 每页 6 张 · 沿虚线裁剪后按编号发放`,
           size: 18,
           color: '8A7A58',
           font: 'Noto Serif SC',
@@ -555,16 +565,33 @@ export async function downloadClueCardsDocx(plan: PlanData | null | undefined, t
     }),
   ]
 
-  clues.forEach((clue, index) => {
-    children.push(clueCard(clue))
-    children.push(
-      new Paragraph({
-        spacing: { before: index === clues.length - 1 ? 0 : 200, after: 200 },
-        border: index === clues.length - 1 ? undefined : { bottom: { style: BorderStyle.DASHED, size: 4, color: 'BBBBBB', space: 8 } },
-        children: [new TextRun({ text: '', size: 8 })],
-      }),
-    )
-  })
+  for (let i = 0; i < clues.length; i += 6) {
+    const batch = clues.slice(i, i + 6)
+    while (batch.length < 6) batch.push({} as ClueData)
+    for (let r = 0; r < 3; r++) {
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          borders: {
+            top: cut, bottom: r === 2 ? cut : { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            left: cut, right: cut,
+            insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+            insideVertical: cut,
+          },
+          rows: [
+            new TableRow({
+              height: { value: 3050, rule: 'atLeast' } as never,
+              children: [cardCell(batch[r * 2]), cardCell(batch[r * 2 + 1])],
+            }),
+          ],
+        }),
+      )
+      if (r < 2) {
+        children.push(new Paragraph({ spacing: { before: 0, after: 0 }, children: [new TextRun({ text: '', size: 2 })] }))
+      }
+    }
+    children.push(new Paragraph({ spacing: { before: 120, after: 60 }, children: [new TextRun({ text: '✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -', size: 12, color: 'BBBBBB', font: 'Noto Serif SC' })] }))
+  }
 
   const doc = new Document({ sections: [{ properties: {}, children }] })
   const blob = await Packer.toBlob(doc)
