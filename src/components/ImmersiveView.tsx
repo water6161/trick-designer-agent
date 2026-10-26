@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { exportPlan } from '../lib/api'
+import { parsePlanFromMarkdown } from '../lib/parsePlan'
 import type { ClueData, PlanData } from '../types'
 
 interface Props {
   conversationId: string
+  fallbackMarkdown?: string
   onClose: () => void
 }
 
@@ -85,24 +87,35 @@ function ClueCard({ clue }: { clue: ClueData }) {
   )
 }
 
-export default function ImmersiveView({ conversationId, onClose }: Props) {
+export default function ImmersiveView({ conversationId, fallbackMarkdown, onClose }: Props) {
   const [plan, setPlan] = useState<PlanData | null>(null)
   const [error, setError] = useState('')
   const [stage, setStage] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    const parsed = fallbackMarkdown && fallbackMarkdown.length > 200 ? parsePlanFromMarkdown(fallbackMarkdown) : null
     exportPlan(conversationId)
       .then((data) => {
-        if (!cancelled) setPlan(data.plan || { title: data.title })
+        if (cancelled) return
+        // 导出接口的结构化数据优先（flash 提取更规整），缺失字段用正文解析结果补齐
+        const remote = data.plan
+        if (remote && Object.keys(remote).length > 2) {
+          setPlan({ ...(parsed || {}), ...remote, title: remote.title || parsed?.title || data.title } as PlanData)
+        } else {
+          setPlan(parsed || { title: data.title })
+        }
       })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : '方案加载失败')
+      .catch(() => {
+        if (!cancelled) {
+          if (parsed) setPlan(parsed)
+          else setError('方案加载失败，请重新生成一次方案。')
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [conversationId])
+  }, [conversationId, fallbackMarkdown])
 
   const next = useCallback(() => setStage((s) => Math.min(s + 1, STAGE_TITLES.length - 1)), [])
   const prev = useCallback(() => setStage((s) => Math.max(s - 1, 0)), [])

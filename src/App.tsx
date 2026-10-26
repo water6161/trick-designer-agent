@@ -318,7 +318,13 @@ export default function App() {
       </header>
 
       {immersive && hasPlan && (
-        <ImmersiveView conversationId={activeId} onClose={() => setImmersive(false)} />
+        <ImmersiveView
+          conversationId={activeId}
+          fallbackMarkdown={
+            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
+          }
+          onClose={() => setImmersive(false)}
+        />
       )}
 
         {streaming && <StageProgress stage={stage} />}
