@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { SparkIcon } from './icons'
 
 interface Props {
@@ -40,6 +41,33 @@ const PRESETS = [
 ]
 
 export default function Welcome({ onPick }: Props) {
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const [tilt, setTilt] = useState({ x: 0, y: 0, gx: 50, gy: 30 })
+
+  // 鼠标跟随：卷宗轻微 3D 倾斜 + 光晕跟随
+  useEffect(() => {
+    const node = sheetRef.current
+    if (!node) return
+    const onMove = (event: MouseEvent) => {
+      const rect = node.getBoundingClientRect()
+      const px = (event.clientX - rect.left) / rect.width
+      const py = (event.clientY - rect.top) / rect.height
+      setTilt({
+        x: (0.5 - py) * 4,
+        y: (px - 0.5) * 5,
+        gx: Math.max(0, Math.min(100, px * 100)),
+        gy: Math.max(0, Math.min(100, py * 100)),
+      })
+    }
+    const onLeave = () => setTilt({ x: 0, y: 0, gx: 50, gy: 30 })
+    node.addEventListener('mousemove', onMove)
+    node.addEventListener('mouseleave', onLeave)
+    return () => {
+      node.removeEventListener('mousemove', onMove)
+      node.removeEventListener('mouseleave', onLeave)
+    }
+  }, [])
+
   return (
     <section className="dossier">
       <div className="dossier-spine" aria-hidden="true">
@@ -47,18 +75,32 @@ export default function Welcome({ onPick }: Props) {
         <span className="dossier-spine-year">CASE&nbsp;FILES</span>
       </div>
 
-      <div className="dossier-sheet">
+      <div
+        className="dossier-sheet"
+        ref={sheetRef}
+        style={
+          {
+            '--tilt-x': `${tilt.x}deg`,
+            '--tilt-y': `${tilt.y}deg`,
+            '--glow-x': `${tilt.gx}%`,
+            '--glow-y': `${tilt.gy}%`,
+          } as React.CSSProperties
+        }
+      >
+        <div className="dossier-glow" aria-hidden="true" />
+
         <header className="dossier-head">
-          <div className="dossier-stamp">绝密</div>
+          <div className="dossier-stamp" aria-hidden="true">
+            绝密
+          </div>
           <div className="dossier-head-main">
             <p className="dossier-kicker">
               <SparkIcon size={13} />
               资深诡计设计师 · 公平性裁判
             </p>
             <h2 className="dossier-title">
-              先定舞台，
-              <br />
-              再设计一场无法被看穿的局。
+              <span>先定舞台，</span>
+              <span>再设计一场无法被看穿的局。</span>
             </h2>
             <p className="dossier-desc">
               告诉我题材、人数、难度与想要的诡计类型。我会检索经典套路与玩家雷点，输出完整诡计方案，
@@ -72,8 +114,13 @@ export default function Welcome({ onPick }: Props) {
         </div>
 
         <div className="dossier-grid">
-          {PRESETS.map((preset) => (
-            <button key={preset.title} className="dossier-card" onClick={() => onPick(preset.prompt)}>
+          {PRESETS.map((preset, index) => (
+            <button
+              key={preset.title}
+              className="dossier-card"
+              style={{ animationDelay: `${0.28 + index * 0.07}s` }}
+              onClick={() => onPick(preset.prompt)}
+            >
               <span className="dossier-card-no">{preset.no}</span>
               <span className="dossier-card-tag">{preset.tag}</span>
               <strong>{preset.title}</strong>

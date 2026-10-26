@@ -686,6 +686,8 @@ textarea {
 }
 
 .dossier-spine {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -713,11 +715,25 @@ textarea {
   font-weight: 600;
 }
 
+.dossier-spine::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 90px;
+  top: -90px;
+  background: linear-gradient(180deg, transparent, rgba(232, 201, 138, 0.18), transparent);
+  animation: spine-sweep 6s ease-in-out 1.2s infinite;
+}
+
 .dossier-sheet {
   position: relative;
   flex: 1;
   min-width: 0;
   padding: 34px 38px 26px;
+  transform: perspective(1400px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
   border: 1px solid rgba(216, 178, 106, 0.26);
   border-radius: 0 14px 14px 0;
   background:
@@ -726,6 +742,26 @@ textarea {
     rgba(14, 16, 22, 0.86);
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(14px);
+  animation: dossier-unfold 0.62s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  transform-origin: left center;
+}
+
+.dossier-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    340px 260px at var(--glow-x, 50%) var(--glow-y, 30%),
+    rgba(216, 178, 106, 0.13),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.dossier-sheet:hover .dossier-glow {
+  opacity: 1;
 }
 
 .dossier-sheet::after {
@@ -758,6 +794,11 @@ textarea {
   writing-mode: vertical-rl;
   transform: rotate(-4deg);
   opacity: 0.85;
+  animation: stamp-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.35s both;
+}
+
+.dossier-sheet:hover .dossier-stamp {
+  animation: stamp-breathe 2.4s ease-in-out infinite;
 }
 
 .dossier-head-main {
@@ -786,6 +827,22 @@ textarea {
   line-height: 1.36;
   letter-spacing: 0.015em;
   color: #f0e8d6;
+}
+
+.dossier-title span {
+  display: block;
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(4px);
+  animation: title-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.dossier-title span:nth-child(1) {
+  animation-delay: 0.3s;
+}
+
+.dossier-title span:nth-child(2) {
+  animation-delay: 0.42s;
 }
 
 .dossier-desc {
@@ -840,11 +897,57 @@ textarea {
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
 
+.dossier-card {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: card-slide 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.dossier-card::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: var(--gold);
+  transform: scaleY(0);
+  transform-origin: center;
+  transition: transform 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.dossier-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 35%, rgba(216, 178, 106, 0.1) 50%, transparent 65%);
+  background-size: 260% 100%;
+  background-position: 120% 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
 .dossier-card:hover {
   border-color: rgba(216, 178, 106, 0.4);
-  border-left-color: var(--gold);
   background: rgba(216, 178, 106, 0.07);
-  transform: translateY(-2px);
+  transform: translateY(-3px) translateX(2px);
+  box-shadow: -6px 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.dossier-card:hover::before {
+  transform: scaleY(1);
+}
+
+.dossier-card:hover::after {
+  opacity: 1;
+  animation: card-sheen 0.7s ease forwards;
+}
+
+.dossier-card:hover .dossier-card-no {
+  color: var(--gold-strong);
+  text-shadow: 0 0 12px rgba(216, 178, 106, 0.5);
 }
 
 .dossier-card-no {
@@ -1150,6 +1253,96 @@ textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dossier,
+  .dossier-sheet,
+  .dossier-title span,
+  .dossier-card,
+  .dossier-stamp,
+  .dossier-spine::after {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+@keyframes dossier-unfold {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) rotateY(-7deg) translateX(-14px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes title-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes card-slide {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes card-sheen {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@keyframes stamp-in {
+  from {
+    opacity: 0;
+    transform: rotate(-18deg) scale(1.6);
+  }
+  to {
+    opacity: 0.85;
+    transform: rotate(-4deg) scale(1);
+  }
+}
+
+@keyframes stamp-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: rotate(-4deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(-4deg) scale(1.04);
+  }
+}
+
+@keyframes spine-sweep {
+  0% {
+    top: -90px;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    top: 100%;
+    opacity: 0;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
 }
 
 @keyframes fade-up {
