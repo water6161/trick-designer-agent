@@ -121,5 +121,24 @@ export function parsePlanFromMarkdown(md: string): PlanData {
   const score = md.match(/锁凶充分性评分[：:]\s*(\d{1,3})\s*\/\s*100/)
   if (score) plan.lock_score = Number(score[1])
 
+  // 沉浸互动剧情（第十一节）：### 互动N：标题 + 场景 + 选项表
+  const sec11 = mdSection(md, '十一')
+  if (sec11) {
+    const blocks = [...sec11.matchAll(/^###\s*互动\s*(\d+)?[：:]?\s*([^\n]*)\n([\s\S]*?)(?=^###\s*互动|(?![\s\S]))/gm)]
+    plan.interactions = blocks.map((m) => {
+      const text = m[3]
+      const sceneMatch = text.match(/场景[：:]?\s*([\s\S]*?)(?=\n(?:\s*\|)|$)/)
+      return {
+        title: (m[2] || `互动 ${m[1] || ''}`).trim().replace(/[：:]$/, ''),
+        scene: (sceneMatch ? sceneMatch[1] : '').trim(),
+        options: rowsToObjects(mdRows(text)).map((row) => ({
+          text: pick(row, ['选项', '选择', '行动']),
+          result: pick(row, ['结果', '描述']),
+          type: pick(row, ['结局', '类型']) || '安全',
+        })).filter((o) => o.text),
+      }
+    }).filter((node) => node.options.length >= 2)
+  }
+
   return plan as unknown as PlanData
 }

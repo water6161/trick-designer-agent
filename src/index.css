@@ -1498,6 +1498,38 @@ textarea {
   cursor: default;
 }
 
+.imm-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 28px;
+  width: min(560px, 90%);
+}
+
+.imm-choice {
+  background: rgba(6, 10, 20, 0.85);
+  border: 1px solid rgba(216, 181, 106, 0.35);
+  color: #d8c9a8;
+  font-size: 14px;
+  text-align: left;
+  padding: 14px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.imm-choice:hover {
+  border-color: rgba(216, 181, 106, 0.8);
+  background: rgba(126, 20, 22, 0.18);
+  transform: translateX(4px);
+}
+
+.imm-death-label {
+  color: #c0392b;
+  font-size: 13px;
+  letter-spacing: 4px;
+}
+
 .imm-overlay {
   position: fixed;
   inset: 0;

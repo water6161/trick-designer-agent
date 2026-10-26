@@ -9,7 +9,113 @@ interface Props {
   onClose: () => void
 }
 
-const STAGE_TITLES = ['序幕', '背景', '案发', '人物', '搜证', '时间线', '指凶']
+const STAGE_TITLES = ['序幕', '背景', '案发', '人物', '搜证', '时间线', '指凶', '抉择']
+
+interface InteractionOption {
+  text: string
+  result: string
+  type: string
+}
+
+interface InteractionNode {
+  title: string
+  scene: string
+  options: InteractionOption[]
+}
+
+function outcomeType(type: string): 'death' | 'risk' | 'safe' {
+  if (type.includes('死')) return 'death'
+  if (type.includes('疑') || type.includes('险')) return 'risk'
+  return 'safe'
+}
+
+function InteractiveStage({ plan }: { plan: PlanData | null }) {
+  const nodes = (Array.isArray(plan?.interactions) ? (plan!.interactions as InteractionNode[]) : []).filter(
+    (n) => n && Array.isArray(n.options) && n.options.length >= 2,
+  )
+  const [idx, setIdx] = useState(0)
+  const [outcome, setOutcome] = useState<{ type: 'death' | 'risk' | 'safe'; result: string } | null>(null)
+
+  if (!nodes.length) {
+    return (
+      <div className="imm-center">
+        <h2 className="imm-heading">抉择时刻</h2>
+        <p className="imm-para">本套方案未附带互动剧情，重新生成一次方案即可解锁。</p>
+      </div>
+    )
+  }
+
+  if (idx >= nodes.length) {
+    return (
+      <div className="imm-center">
+        <h2 className="imm-heading">🌅 你活到了最后</h2>
+        <p className="imm-para">每一个平安的选择，背后都有一条为你亮着的线索。</p>
+        <p className="imm-para">真相已经揭开——退出沉浸模式，回到工作台继续复盘或迭代方案。</p>
+      </div>
+    )
+  }
+
+  const node = nodes[idx]
+
+  if (outcome) {
+    if (outcome.type === 'death') {
+      return (
+        <div className="imm-center">
+          <p className="imm-eyebrow imm-death-label">💀 死亡结局</p>
+          <h2 className="imm-heading">你已出局</h2>
+          <p className="imm-para">{outcome.result}</p>
+          <p className="imm-para imm-hint">死亡不是终点——回到抉择，用线索重新判断。</p>
+          <button className="imm-btn" onClick={() => setOutcome(null)}>
+            重新抉择
+          </button>
+        </div>
+      )
+    }
+    return (
+      <div className="imm-center">
+        <p className="imm-eyebrow">{outcome.type === 'risk' ? '⚠️ 侥幸过关' : '✅ 平安'}</p>
+        <p className="imm-para">{outcome.result}</p>
+        {idx < nodes.length - 1 && (
+          <button className="imm-btn" onClick={() => { setOutcome(null); setIdx((v) => v + 1) }}>
+            继续
+          </button>
+        )}
+        {idx >= nodes.length - 1 && (
+          <button className="imm-btn" onClick={() => { setOutcome(null); setIdx((v) => v + 1) }}>
+            迎接结局
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="imm-center imm-text">
+      <p className="imm-eyebrow">抉择 {idx + 1} / {nodes.length} · {node.title}</p>
+      {node.scene
+        .split('\n')
+        .filter((p) => p.trim())
+        .slice(0, 4)
+        .map((p, i) => (
+          <p key={i} className="imm-para imm-fade" style={{ animationDelay: `${i * 0.2}s` }}>
+            {p.replace(/^场景[：:]\s*/, '')}
+          </p>
+        ))}
+      <div className="imm-choices">
+        {node.options.map((opt, i) => (
+          <button
+            key={i}
+            className="imm-choice imm-fade"
+            style={{ animationDelay: `${0.3 + i * 0.15}s` }}
+            onClick={() => setOutcome({ type: outcomeType(opt.type), result: opt.result || opt.text })}
+          >
+            {opt.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function Seribold({ children }: { children: React.ReactNode }) {
   return <strong style={{ color: '#d8b56a' }}>{children}</strong>
@@ -218,14 +324,16 @@ export default function ImmersiveView({ conversationId, fallbackMarkdown, onClos
                 <h2 className="imm-heading">指凶时刻</h2>
                 <p className="imm-para">所有人集中。每人一段话陈述指认对象与理由。</p>
                 <p className="imm-para">
-                  想盘问某个角色的细节？退出沉浸模式，直接在对话里问——比如
-                  <Seribold>「21:40 时某某说他在哪里，证词可信吗？」</Seribold>
+                  想盘问某个角色的细节？方向键或下方按钮继续——
+                  <Seribold>接下来是专属于你的抉择时刻。</Seribold>
                 </p>
-                <button className="imm-btn" onClick={onClose}>
-                  回到工作台盘问
+                <button className="imm-btn" onClick={next}>
+                  进入抉择
                 </button>
               </div>
             )}
+
+            {stage === 7 && <InteractiveStage plan={plan} />}
           </>
         )}
       </div>
