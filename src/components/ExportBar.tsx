@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
-import { copyText, COVER_STYLES, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx, type CoverStyle } from '../lib/exporters'
+import { copyText, COVER_STYLES, downloadAICoverPNG, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx, type CoverStyle } from '../lib/exporters'
+import { aiCover } from '../lib/api'
 
 interface Props {
   conversationId: string
@@ -38,6 +39,22 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     </button>
   )
 
+  const runCover = async (task: (plan: ExportPlan) => Promise<void> | void) => {
+    if (busy || disabled) return
+    setBusy(true)
+    setMessage('AI 封面约需 30~60 秒…')
+    try {
+      const plan = await exportPlan(conversationId)
+      await task(plan)
+      setMessage('完成')
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '导出失败，请重试。')
+    } finally {
+      setBusy(false)
+      setTimeout(() => setMessage(''), 6000)
+    }
+  }
+
   return (
     <div className="export-bar">
       <span className="export-label">开本稿</span>
@@ -52,6 +69,16 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
         setCoverIdx((i) => (i + 1) % COVER_STYLES.length)
         return result
       }, 'cover')}
+      {btn('✨ AI 封面', () => void runCover(async (plan) => {
+        const { image } = await aiCover(conversationId)
+        downloadAICoverPNG(image, {
+          title: plan.title,
+          genre: plan.brief?.genre,
+          players: plan.brief?.players,
+          difficulty: plan.brief?.difficulty,
+          lockScore: plan.lockScore,
+        })
+      }), 'aicover')}
       {busy && <span className="export-msg">正在导出…</span>}
       {!busy && message && <span className="export-msg">{message}</span>}
     </div>

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from typing import Any, AsyncIterator
 
 from langchain_core.messages import HumanMessage
@@ -539,6 +540,84 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
     }
 
 
+async def _handle_ai_cover(env: Any, store: Any, conversation_id: str) -> dict[str, Any]:
+    """调用通义万相生成 AI 封面插画，返回 base64 图片（前端再叠加标题文字）。
+
+    走 DashScope 异步文生图接口：建任务 → 轮询 → 取图 → 转 base64。
+    任何一步失败都返回友好 error，不影响其他功能。
+    """
+    import base64
+
+    import requests
+
+    export = await _handle_export(store, conversation_id)
+    if export.get("error") or not export.get("markdown"):
+        return {"error": export.get("error") or "还没有可导出的方案。"}
+    if not getattr(env, "api_key", "") or "dashscope" not in str(getattr(env, "base_url", "")):
+        return {"error": "当前模型服务不支持 AI 生图。"}
+
+    title = str(export.get("title") or "未命名诡计方案")[:24]
+    brief = export.get("brief") or {}
+    genre = str(brief.get("genre") or "")
+    mood = str(brief.get("difficulty") or "")
+    prompt = (
+        f"剧本杀游戏封面插画，{title}，{genre}题材，悬疑惊悚氛围，"
+        "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
+        " nosieur级插画画质，画面中不要出现任何文字、字母或水印"
+    ).replace(" nosieur级插画画质", "高清大师级插画画质")
+    negative = "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形"
+
+    api_key = getattr(env, "api_key", "")
+    base = str(getattr(env, "base_url", "")).replace("/compatible-mode/v1", "")
+
+    def _call() -> str:
+        create = requests.post(
+            f"{base}/api/v1/services/aigc/text2image/image-synthesis",
+            headers={"Authorization": f"Bearer {api_key}", "X-DashScope-Async": "enable",
+                     "Content-Type": "application/json"},
+            json={
+                "model": "wanx2.1-t2i-turbo",
+                "input": {"prompt": prompt, "negative_prompt": negative},
+                "parameters": {"n": 1, "size": "720*960", "prompt_extend": True},
+            },
+            timeout=30,
+        )
+        create.raise_for_status()
+        task_id = str(((create.json().get("output") or {}).get("task_id")) or "")
+        if not task_id:
+            raise RuntimeError(f"未获取到 task_id：{create.text[:200]}")
+        url = ""
+        for _ in range(30):
+            time.sleep(3)
+            poll = requests.get(
+                f"{base}/api/v1/tasks/{task_id}",
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=15,
+            )
+            body = poll.json().get("output") or {}
+            status = str(body.get("task_status") or "")
+            if status == "SUCCEEDED":
+                url = str(((body.get("results") or [{}])[0].get("url")) or "")
+                break
+            if status in ("FAILED", "CANCELED", "UNKNOWN"):
+                raise RuntimeError(f"生图任务失败：{status} {str(body.get('message') or '')[:120]}")
+        if not url:
+            raise RuntimeError("生图任务超时（90 秒）")
+        img = requests.get(url, timeout=30)
+        img.raise_for_status()
+        return "data:image/png;base64," + base64.b64encode(img.content).decode()
+
+    try:
+        image = await asyncio.to_thread(_call)
+        return {"image": image, "title": export.get("title") or title}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("ai cover failed", exc)
+        msg = str(exc)[:200]
+        if "Model.ACC" in msg or "403" in msg or "InvalidApiKey" in msg:
+            msg = "当前阿里云账号未开通通义万相生图服务（或额度不足），可到百炼控制台开通后重试。"
+        return {"error": f"AI 封面生成失败：{msg}"}
+
+
 async def _handle_delete(store: Any, conversation_id: str) -> dict[str, Any]:
     try:
         await store.delete_conversation(conversation_id=conversation_id)
@@ -615,6 +694,8 @@ async def handler(context: Any):
         return await _handle_delete(store, target)
     if action == "export":
         return await _handle_export(store, conversation_id)
+    if action == "ai_cover":
+        return await _handle_ai_cover(env, store, conversation_id)
     if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
 

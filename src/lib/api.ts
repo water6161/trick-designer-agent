@@ -127,6 +127,20 @@ export interface ExportPlan {
   plan?: PlanData | null
 }
 
+export async function aiCover(conversationId: string): Promise<{ image: string; title: string }> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'ai_cover' }),
+  })
+  const data = (await readJson(response)) as Record<string, unknown>
+  if (data.error) throw new Error(String(data.error))
+  if (typeof data.image !== 'string' || !data.image.startsWith('data:image/')) {
+    throw new Error('AI 封面返回格式异常。')
+  }
+  return { image: data.image, title: typeof data.title === 'string' ? data.title : '未命名诡计方案' }
+}
+
 export async function exportPlan(conversationId: string): Promise<ExportPlan> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',

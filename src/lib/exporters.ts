@@ -223,6 +223,74 @@ export function downloadCoverPNG(meta: CoverMeta, style: CoverStyle = 'classic')
   image.src = url
 }
 
+/** AI 生成插画封面：AI 图片打底 + 画布叠加标题/信息文字（AI 画字会崩，文字必须自己画）。 */
+export function downloadAICoverPNG(imageDataUrl: string, meta: CoverMeta): void {
+  const image = new Image()
+  image.onload = () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 900
+    canvas.height = 1200
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    // cover 模式铺满画布
+    const scale = Math.max(900 / image.width, 1200 / image.height)
+    const w = image.width * scale
+    const h = image.height * scale
+    ctx.drawImage(image, (900 - w) / 2, (1200 - h) / 2, w, h)
+    // 上下暗色渐晕，保证文字可读
+    const shade = ctx.createLinearGradient(0, 0, 0, 1200)
+    shade.addColorStop(0, 'rgba(5,8,16,0.55)')
+    shade.addColorStop(0.45, 'rgba(5,8,16,0.05)')
+    shade.addColorStop(0.8, 'rgba(5,8,16,0.72)')
+    shade.addColorStop(1, 'rgba(5,8,16,0.9)')
+    ctx.fillStyle = shade
+    ctx.fillRect(0, 0, 900, 1200)
+    // 描边双框
+    ctx.strokeStyle = 'rgba(216,181,106,0.8)'
+    ctx.lineWidth = 3
+    ctx.strokeRect(36, 36, 828, 1128)
+    ctx.strokeStyle = 'rgba(216,181,106,0.35)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(48, 48, 804, 1104)
+    // 顶部眉题
+    ctx.textAlign = 'center'
+    ctx.fillStyle = 'rgba(216,181,106,0.9)'
+    ctx.font = '24px Georgia, serif'
+    const spaced = 'TRICK ARCHITECT'.split('').join(' ')
+    ctx.fillText(spaced, 450, 130)
+    // 主标题（带描影）
+    ctx.font = "700 72px 'Noto Serif SC', 'Songti SC', serif"
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+    ctx.shadowBlur = 16
+    ctx.fillStyle = '#f2e8d2'
+    const title = meta.title.slice(0, 12)
+    ctx.fillText(title, 450, 620)
+    ctx.shadowBlur = 0
+    ctx.strokeStyle = 'rgba(216,181,106,0.85)'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(250, 680)
+    ctx.lineTo(650, 680)
+    ctx.stroke()
+    // 信息行
+    const info: string[] = []
+    if (meta.genre) info.push(`题材 ${meta.genre}`)
+    if (meta.players) info.push(`人数 ${meta.players}`)
+    if (meta.difficulty) info.push(`难度 ${meta.difficulty}`)
+    if (typeof meta.lockScore === 'number') info.push(`公平性评分 ${meta.lockScore}/100`)
+    ctx.font = "30px 'Noto Serif SC', serif"
+    ctx.fillStyle = '#cbb88f'
+    ctx.fillText(info.join('　·　'), 450, 760)
+    ctx.font = "18px serif"
+    ctx.fillStyle = 'rgba(203,184,143,0.6)'
+    ctx.fillText('仅供虚构剧本创作 · 诡计依赖虚构设定 · 现实不可复刻', 450, 1130)
+    canvas.toBlob((png) => {
+      if (png) saveBlob(png, `${meta.title}·AI封面.png`)
+    }, 'image/png')
+  }
+  image.src = imageDataUrl
+}
+
 // ───────────────────────── Word 导出 ─────────────────────────
 
 const HEADING_LEVELS: Record<number, (typeof HeadingLevel)[keyof typeof HeadingLevel]> = {
