@@ -17,13 +17,13 @@ from .kb import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
 from .prompts import (
-    AUDIT_SYSTEM,
     COMPOSE_QA_SYSTEM,
     COMPOSE_SYSTEM,
-    DESIGN_SYSTEM,
+    DESIGN_STREAM_SYSTEM,
+    EXTRACT_SYSTEM,
     UNDERSTAND_SYSTEM,
 )
-from .schemas import BriefPatch, DesignPlan, FairnessAudit
+from .schemas import BriefPatch, PlanDigest
 from .search import build_queries, run_searches
 from .state import AgentState
 
@@ -214,6 +214,7 @@ async def understand(
         updates["design"] = {}
         updates["audit"] = {}
         updates["research"] = []
+        updates["design_markdown"] = ""
 
     writer({"event": "status", "stage": "understood", "label": "需求已确认"})
     return updates
@@ -253,13 +254,13 @@ async def research(
 async def design(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
+    """流式设计：直接产出完整 Markdown 方案，token 实时推给用户（不再生成大 JSON）。"""
     writer = get_stream_writer()
     writer({"event": "status", "stage": "design", "label": "正在搭建核心诡计与线索链"})
 
-    # 极速模式=精简输出（实测 54s 出全套含自查）；flash/turbo 撑不起大 JSON，不用
     model = get_model(env, "reason")
     brief = state.get("brief") or {}
-    previous = state.get("design") or {}
+    previous_markdown = state.get("design_markdown") or ""
     research = state.get("research") or []
 
     payload = {
@@ -267,98 +268,116 @@ async def design(
         "本轮改动": brief.get("modifications") or [],
         "本地知识库参考（精选诡计/结构整理，可引用思路但不要照抄）": retrieve_knowledge(brief),
         "输出要求": (
-            "除完整方案外，必须在 self_audit 字段中一并完成公平性自查（锁凶充分性评分、降智检查、其他解释排除、必修问题）。"
-            + ("【极速模式】方案务必精简：公开线索3条、深入线索2条、时间线4条、角色4人，每条内容一两句话点到为止。"
+            "直接流式输出完整 Markdown 方案，第一行就是《标题》，不要任何开场白。"
+            + ("【极速模式】全文精简：公开线索4条、深入线索3条、时间线4条、角色4人，每条内容一两句话点到为止，其余章节同样压缩。"
                if _speed_mode(state) else "")
         ),
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:12]
         ],
-        "上一版方案（迭代时在它基础上修改；为空表示全新创作）": previous or None,
+        "上一版方案全文（迭代时在它基础上修改，为空表示全新创作）": previous_markdown[:8000] or None,
         "本轮用户原话": _last_user_text(state),
     }
     messages = [
-        SystemMessage(content=DESIGN_SYSTEM),
+        SystemMessage(content=DESIGN_STREAM_SYSTEM),
         HumanMessage(content=_json(payload)),
     ]
 
-    plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeouts=[140, 110]
-    )
-    writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
+    parts: list[str] = []
+    async for chunk in model.astream(messages):
+        delta = _text(getattr(chunk, "content", ""))
+        if not delta:
+            continue
+        parts.append(delta)
+        writer({"event": "token", "delta": delta})
 
-    updates: dict[str, Any] = {"design": plan.model_dump()}
-    if plan.self_audit is not None:
-        # 自查已随设计一次完成，audit 节点直接复用，省一轮模型调用
-        updates["audit"] = plan.self_audit.model_dump()
-    return updates
+    markdown = "".join(parts).strip()
+    if len(markdown) < 200:
+        raise RuntimeError(f"方案正文过短（{len(markdown)} 字符），模型可能未正常输出，请重试。")
+
+    writer({"event": "status", "stage": "designed", "label": "方案正文已完成"})
+    return {"design_markdown": markdown}
 
 
-async def audit(
+async def extract(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
+    """用轻量模型把流式 Markdown 秒级提取为结构化摘要（供线索卡/沉浸模式/导出）。
+
+    提取失败不阻断交付：Markdown 正文已经展示给用户，只少了结构化卡片。
+    """
     writer = get_stream_writer()
-    writer({"event": "status", "stage": "audit", "label": "正在做公平性自查"})
+    writer({"event": "status", "stage": "extract", "label": "正在提取线索卡与人物档案"})
 
-    plan = state.get("design") or {}
-    brief = state.get("brief") or {}
-
-    # design 阶段已附带自查结果时直接复用，不再调用模型
-    preset = state.get("audit") or {}
-    if preset and not preset.get("failed") and preset.get("lock_score") is not None:
-        writer(
-            {
-                "event": "notice",
-                "message": f"公平性自查已随设计完成：锁凶充分性 {preset.get('lock_score')}/100。",
-            }
-        )
-        return {"audit": preset}
-
-    model = get_model(env, "reason")
-    payload = {
-        "需求": brief,
-        "待审方案": plan,
-        "审查重点": "锁凶是否充分、线索是否所有玩家可得、是否存在其他合理解释、是否强行降智、时间线是否矛盾、红鲱鱼能否被排除、尺度与可复刻性。",
-    }
+    markdown = state.get("design_markdown") or ""
+    model = get_model(env, "fast")
     messages = [
-        SystemMessage(content=AUDIT_SYSTEM),
-        HumanMessage(content=_json(payload)),
+        SystemMessage(content=EXTRACT_SYSTEM),
+        HumanMessage(content=markdown[:16000]),
     ]
 
     try:
-        result: FairnessAudit = await _invoke_structured(  # type: ignore[assignment]
-            model, FairnessAudit, messages, timeouts=[120, 90]
+        digest: PlanDigest = await _invoke_structured(  # type: ignore[assignment]
+            model, PlanDigest, messages, timeouts=[90, 60]
         )
-        data = result.model_dump()
-        writer(
-            {
-                "event": "notice",
-                "message": f"公平性自查完成：锁凶充分性 {result.lock_score}/100。",
-            }
-        )
-        return {"audit": data}
     except Exception as exc:
-        # 自查失败不阻断交付，但必须如实告知玩家
-        logger.exception("audit failed", exc)
-        writer(
-            {
-                "event": "notice",
-                "message": "公平性自查调用失败，本次方案未经完整审查，建议重试或人工复核。",
-            }
-        )
-        fallback = {
-            "failed": True,
-            "lock_score": None,
-            "sufficient_to_identify": False,
-            "forced_stupidity": False,
-            "god_view_only": False,
-            "alternative_solutions": [],
-            "issues": [],
-            "verdict": "自动公平性自查未完成，请人工复核线索链。",
-            "must_fix": ["重新执行一次公平性自查"],
+        logger.exception("extract failed", exc)
+        writer({"event": "notice", "message": "结构化摘要提取失败，方案正文不受影响；线索卡/沉浸模式本轮不可用。"})
+        return {"design": {}, "audit": {}}
+
+    design = {
+        "title": digest.title,
+        "tagline": digest.tagline,
+        "victim": {
+            "name": digest.victim_name,
+            "identity": digest.victim_identity,
+            "death_time": digest.victim_death_time,
+            "cause": "",
+            "scene": digest.victim_scene,
+            "found_by": "",
+        },
+        "background": digest.background,
+        "core_trick": {
+            "name": digest.core_trick_name,
+            "category": digest.core_trick_category,
+            "steps": digest.core_trick_steps,
+            "principle": digest.core_trick_principle,
+            "why_works": "",
+            "risks": [],
+            "reality_safety": digest.reality_safety,
+        },
+        "culprit": {
+            "character": digest.culprit,
+            "motive": digest.culprit_motive,
+            "opportunity": "",
+            "method": "",
+            "cover_up": [],
+            "evidence_chain": digest.culprit_evidence_chain,
+        },
+        "characters": [c.model_dump() for c in digest.characters],
+        "clues_public": [c.model_dump() for c in digest.clues_public],
+        "clues_deep": [c.model_dump() for c in digest.clues_deep],
+        "timeline": [t.model_dump() for t in digest.timeline],
+        "red_herrings": [],
+        "dm_tips": [],
+        "anti_argument": [],
+        "player_traps": [],
+        "iteration_hooks": [],
+    }
+    audit = {
+        "lock_score": digest.lock_score,
+        "verdict": digest.audit_verdict,
+        "must_fix": digest.must_fix,
+        "sufficient_to_identify": digest.lock_score >= 60,
+    }
+    writer(
+        {
+            "event": "notice",
+            "message": f"结构化摘要完成：锁凶充分性 {digest.lock_score}/100，线索卡/沉浸模式已就绪。",
         }
-        return {"audit": fallback}
+    )
+    return {"design": design, "audit": audit}
 
 
 def _compose_title(state: AgentState) -> str:
@@ -406,6 +425,11 @@ async def compose(
             "plan": design or None,
         }
     )
+
+    if not qa:
+        # 完整方案已在 design 节点实时流式展示，这里不再二次生成，直接收尾
+        writer({"event": "status", "stage": "done", "label": "方案交付完成"})
+        return {"title": title}
 
     payload = {
         "模式": "咨询问答" if qa else "完整方案",

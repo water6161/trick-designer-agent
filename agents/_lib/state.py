@@ -14,6 +14,7 @@ class AgentState(TypedDict, total=False):
     brief: dict[str, Any]
     research: list[dict[str, Any]]
     design: dict[str, Any]
+    design_markdown: str  # 设计节点实时流式产出的完整 Markdown 方案
     audit: dict[str, Any]
     intent: str
     qa: bool

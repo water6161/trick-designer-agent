@@ -2,7 +2,7 @@ const STAGES = [
   { key: 'understand', label: '解析' },
   { key: 'research', label: '检索' },
   { key: 'design', label: '设计' },
-  { key: 'audit', label: '审查' },
+  { key: 'extract', label: '提取' },
   { key: 'compose', label: '成稿' },
 ] as const
 

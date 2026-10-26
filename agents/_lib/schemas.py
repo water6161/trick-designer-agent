@@ -101,6 +101,57 @@ class DesignPlan(BaseModel):
     )
 
 
+class ClueCard(BaseModel):
+    """轻量线索卡：供流式架构下从 Markdown 提取。"""
+
+    id: str = Field(description="线索编号，如 C1 / D1。")
+    name: str
+    content: str
+    points_to: str = Field(description="指向谁 / 排除谁。")
+    access: str = Field(default="", description="玩家如何获得。")
+
+
+class DigestCharacter(BaseModel):
+    name: str
+    identity: str
+    secret: str
+    suspicion: str
+
+
+class DigestTimeline(BaseModel):
+    time: str
+    event: str
+    witness: str = Field(default="", description="可验证方式/证人。")
+    visibility: Literal["公开", "深入"] = "公开"
+
+
+class PlanDigest(BaseModel):
+    """从流式 Markdown 方案中提取的轻量结构化摘要（供线索卡/沉浸模式/导出使用）。"""
+
+    title: str
+    tagline: str = Field(default="", description="一句话卖点。")
+    victim_name: str = ""
+    victim_identity: str = ""
+    victim_death_time: str = ""
+    victim_scene: str = ""
+    background: str = Field(default="", description="案发背景，2-3 句话概括。")
+    core_trick_name: str = ""
+    core_trick_category: str = ""
+    core_trick_steps: list[str] = Field(default_factory=list, description="手法拆解，每步一句话。")
+    core_trick_principle: str = ""
+    reality_safety: str = ""
+    culprit: str = Field(default="", description="凶手角色名。")
+    culprit_motive: str = ""
+    culprit_evidence_chain: list[str] = Field(default_factory=list, description="锁凶证据链，3-5 环。")
+    characters: list[DigestCharacter] = Field(default_factory=list)
+    clues_public: list[ClueCard] = Field(default_factory=list)
+    clues_deep: list[ClueCard] = Field(default_factory=list)
+    timeline: list[DigestTimeline] = Field(default_factory=list, description="4-8 条关键时间点。")
+    lock_score: int = Field(default=70, ge=0, le=100, description="从自查报告提取的锁凶充分性评分。")
+    audit_verdict: str = ""
+    must_fix: list[str] = Field(default_factory=list, description="必修问题，每条一句话。")
+
+
 class AuditIssue(BaseModel):
     severity: Literal["high", "medium", "low"]
     category: str
