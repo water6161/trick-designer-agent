@@ -673,6 +673,45 @@ textarea {
   animation-delay: 0.32s;
 }
 
+/* ───────── custom cursors · 侦探主题 ───────── */
+
+/* 放大镜：全局默认光标（热点在镜片中心 12,12） */
+body,
+button,
+input,
+textarea,
+[role="button"] {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><circle cx='12' cy='12' r='7.5' fill='rgba(10,12,20,0.55)' stroke='%23e8c98a' stroke-width='1.6'/><circle cx='12' cy='12' r='5' fill='none' stroke='rgba(232,201,138,0.35)' stroke-width='0.8'/><line x1='17.5' y1='17.5' x2='24' y2='24' stroke='%23e8c98a' stroke-width='2.6' stroke-linecap='round'/><line x1='17.5' y1='17.5' x2='24' y2='24' stroke='rgba(0,0,0,0.5)' stroke-width='1' stroke-linecap='round'/></svg>") 12 12, auto;
+}
+
+/* 悬停卷宗卡 / 可点击元素：放大镜带十字准心 */
+.dossier-card,
+.preset-card,
+.export-btn,
+.imm-btn,
+.imm-choice,
+.stage,
+.chip,
+.immersive-btn,
+.immersive-fab,
+.banner-action {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><circle cx='14' cy='14' r='9' fill='rgba(126,20,22,0.35)' stroke='%23f0d9a6' stroke-width='2'/><line x1='14' y1='8' x2='14' y2='20' stroke='rgba(240,217,166,0.55)' stroke-width='0.9'/><line x1='8' y1='14' x2='20' y2='14' stroke='rgba(240,217,166,0.55)' stroke-width='0.9'/><line x1='20.5' y1='20.5' x2='28' y2='28' stroke='%23f0d9a6' stroke-width='3' stroke-linecap='round'/></svg>") 14 14, pointer;
+}
+
+/* 文本区域：笔尖光标，方便输入时的手感 */
+textarea,
+input[type="text"],
+.chat-input textarea {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><path d='M4 22 L6.5 15 L17 4.5 L21.5 9 L11 19.5 Z' fill='rgba(240,217,166,0.85)' stroke='%23947b4a' stroke-width='1'/><path d='M4 22 L6.5 15 L9.5 18 Z' fill='%235b4a2a'/></svg>") 4 22, text;
+}
+
+/* 禁用态回到系统默认 */
+button:disabled,
+.export-btn:disabled,
+.immersive-btn:disabled {
+  cursor: not-allowed;
+}
+
 /* ───────── welcome · dossier ───────── */
 
 .dossier {
