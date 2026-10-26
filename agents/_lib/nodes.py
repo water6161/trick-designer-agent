@@ -101,7 +101,15 @@ async def _invoke_structured(
 
     last_error: str = ""
     for attempt in range(max_attempts):
-        response = await asyncio.wait_for(bound.ainvoke(working), timeout=timeout)
+        try:
+            response = await asyncio.wait_for(bound.ainvoke(working), timeout=timeout)
+        except (asyncio.TimeoutError, TimeoutError):
+            # 单次超时只作废本次尝试，继续下一轮，避免整体直接失败
+            last_error = f"第{attempt + 1}次尝试超时（{timeout:.0f}s）"
+            logger.error("structured attempt %d/%d timed out after %.0fs", attempt + 1, max_attempts, timeout)
+            if attempt < max_attempts - 1:
+                continue
+            break
         calls = getattr(response, "tool_calls", None) or []
         for call in calls:
             args = call.get("args") or {}
@@ -273,7 +281,7 @@ async def design(
     ]
 
     plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeout=80, max_attempts=3
+        model, DesignPlan, messages, timeout=100, max_attempts=2
     )
     writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
 
