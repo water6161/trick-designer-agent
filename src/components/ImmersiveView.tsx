@@ -29,12 +29,35 @@ function outcomeType(type: string): 'death' | 'risk' | 'safe' {
   return 'safe'
 }
 
+const CHOICE_SECONDS = 25
+
 function InteractiveStage({ plan }: { plan: PlanData | null }) {
   const nodes = (Array.isArray(plan?.interactions) ? (plan!.interactions as InteractionNode[]) : []).filter(
     (n) => n && Array.isArray(n.options) && n.options.length >= 2,
   )
+  const hidden = (plan?.hidden_ending || null) as { scene?: string; ending?: string } | null
   const [idx, setIdx] = useState(0)
+  const [deaths, setDeaths] = useState(0)
   const [outcome, setOutcome] = useState<{ type: 'death' | 'risk' | 'safe'; result: string } | null>(null)
+  const [timeLeft, setTimeLeft] = useState(CHOICE_SECONDS)
+
+  // 限时抉择：每个节点 25 秒，超时直接判定死亡；展示结果时暂停
+  useEffect(() => {
+    if (outcome || idx >= nodes.length) return
+    setTimeLeft(CHOICE_SECONDS)
+    const started = Date.now()
+    const tick = setInterval(() => {
+      const left = CHOICE_SECONDS - Math.floor((Date.now() - started) / 1000)
+      setTimeLeft(Math.max(left, 0))
+    }, 250)
+    const expire = setTimeout(() => {
+      setOutcome({ type: 'death', result: '你在原地犹豫了太久。黑暗没有给第二次机会——机会稍纵即逝，犹豫本身就是答案。（超时判定）' })
+    }, CHOICE_SECONDS * 1000)
+    return () => {
+      clearInterval(tick)
+      clearTimeout(expire)
+    }
+  }, [idx, outcome, nodes.length])
 
   if (!nodes.length) {
     return (
@@ -46,11 +69,40 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
   }
 
   if (idx >= nodes.length) {
+    const grade =
+      deaths === 0
+        ? { title: '👑 完美神探', desc: '全程无伤，每一次选择都踩在线索铺好的路上。' }
+        : deaths <= 2
+          ? { title: '🌅 幸存者', desc: `你带着 ${deaths} 次死亡的记忆走到了最后。` }
+          : { title: '🕯️ 九死一生', desc: `${deaths} 次死亡之后，你终于学会了用线索思考。` }
+    const unlocked = deaths === 0 && hidden && hidden.ending
     return (
-      <div className="imm-center">
-        <h2 className="imm-heading">🌅 你活到了最后</h2>
-        <p className="imm-para">每一个平安的选择，背后都有一条为你亮着的线索。</p>
-        <p className="imm-para">真相已经揭开——退出沉浸模式，回到工作台继续复盘或迭代方案。</p>
+      <div className="imm-center imm-text">
+        <h2 className="imm-heading">{grade.title}</h2>
+        <p className="imm-para">{grade.desc}</p>
+        {unlocked ? (
+          <>
+            <p className="imm-eyebrow imm-hidden-label">🔮 隐藏真结局已解锁</p>
+            {hidden!.scene
+              ?.split('\n')
+              .filter((p) => p.trim())
+              .map((p, i) => (
+                <p key={`s${i}`} className="imm-para imm-fade" style={{ animationDelay: `${i * 0.2}s` }}>
+                  {p.replace(/^场景[：:]\s*/, '')}
+                </p>
+              ))}
+            <p className="imm-para imm-hidden-ending imm-fade" style={{ animationDelay: '0.6s' }}>
+              {hidden!.ending?.replace(/^真结局[：:]\s*/, '')}
+            </p>
+          </>
+        ) : (
+          <p className="imm-para imm-hint">
+            {hidden && deaths > 0
+              ? `有一段隐藏真结局被死亡次数锁住了——全程无伤通关即可解锁。本轮死亡：${deaths} 次。`
+              : '真相已经揭开——退出沉浸模式，回到工作台继续复盘或迭代方案。'}
+          </p>
+        )}
+        <p className="imm-para imm-hint">退出沉浸模式，回到工作台继续复盘或迭代方案。</p>
       </div>
     )
   }
@@ -64,8 +116,14 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
           <p className="imm-eyebrow imm-death-label">💀 死亡结局</p>
           <h2 className="imm-heading">你已出局</h2>
           <p className="imm-para">{outcome.result}</p>
-          <p className="imm-para imm-hint">死亡不是终点——回到抉择，用线索重新判断。</p>
-          <button className="imm-btn" onClick={() => setOutcome(null)}>
+          <p className="imm-para imm-hint">死亡不是终点——回到抉择，用线索重新判断。（本轮死亡 +1）</p>
+          <button
+            className="imm-btn"
+            onClick={() => {
+              setDeaths((d) => d + 1)
+              setOutcome(null)
+            }}
+          >
             重新抉择
           </button>
         </div>
@@ -91,7 +149,12 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
 
   return (
     <div className="imm-center imm-text">
-      <p className="imm-eyebrow">抉择 {idx + 1} / {nodes.length} · {node.title}</p>
+      <div className="imm-timer" role="timer">
+        <div className="imm-timer-bar" style={{ width: `${(timeLeft / CHOICE_SECONDS) * 100}%` }} />
+      </div>
+      <p className="imm-eyebrow">
+        抉择 {idx + 1} / {nodes.length} · {node.title} · ⏳ {timeLeft}s
+      </p>
       {node.scene
         .split('\n')
         .filter((p) => p.trim())

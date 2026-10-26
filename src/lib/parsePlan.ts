@@ -124,7 +124,7 @@ export function parsePlanFromMarkdown(md: string): PlanData {
   // 沉浸互动剧情（第十一节）：### 互动N：标题 + 场景 + 选项表
   const sec11 = mdSection(md, '十一')
   if (sec11) {
-    const blocks = [...sec11.matchAll(/^###\s*互动\s*(\d+)?[：:]?\s*([^\n]*)\n([\s\S]*?)(?=^###\s*互动|(?![\s\S]))/gm)]
+    const blocks = [...sec11.matchAll(/^###\s*互动\s*(\d+)?[：:]?\s*([^\n]*)\n([\s\S]*?)(?=^###\s|(?![\s\S]))/gm)]
     plan.interactions = blocks.map((m) => {
       const text = m[3]
       const sceneMatch = text.match(/场景[：:]?\s*([\s\S]*?)(?=\n(?:\s*\|)|$)/)
@@ -138,6 +138,19 @@ export function parsePlanFromMarkdown(md: string): PlanData {
         })).filter((o) => o.text),
       }
     }).filter((node) => node.options.length >= 2)
+
+    const hiddenMatch = sec11.match(
+      /###\s*隐藏真结局[^\n]*\n([\s\S]*?)(?=^#{2,3}\s|(?![\s\S]))/,
+    )
+    if (hiddenMatch) {
+      const text = hiddenMatch[1]
+      const sceneM = text.match(/场景[：:]?\s*([\s\S]*?)(?=\n真结局|\n###|\n##|$)/)
+      const endM = text.match(/真结局[：:]?\s*([\s\S]*?)(?=\n###|\n##|$)/)
+      plan.hidden_ending = {
+        scene: (sceneM ? sceneM[1] : '').trim(),
+        ending: (endM ? endM[1] : text).trim(),
+      }
+    }
   }
 
   return plan as unknown as PlanData
