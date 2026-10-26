@@ -273,7 +273,7 @@ async def design(
     ]
 
     plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeout=300, max_attempts=3
+        model, DesignPlan, messages, timeout=80, max_attempts=3
     )
     writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
 
