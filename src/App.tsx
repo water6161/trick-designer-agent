@@ -145,7 +145,10 @@ export default function App() {
     stickRef.current = true
     const handlers = {
       onStatus: (label: string) => setStatus(label),
-      onStage: (value: string) => setStage(value),
+      onStage: (value: string) => {
+        // 心跳事件的 waiting 不改变阶段高亮
+        if (value && value !== 'waiting') setStage(value)
+      },
       onToken: (delta: string) => {
         pendingRef.current += delta
         scheduleFlush()
