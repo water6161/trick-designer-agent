@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
-import { copyText, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx } from '../lib/exporters'
+import { copyText, COVER_STYLES, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx, type CoverStyle } from '../lib/exporters'
 
 interface Props {
   conversationId: string
@@ -12,6 +12,7 @@ interface Props {
 export default function ExportBar({ conversationId, hasPlan, disabled }: Props) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [coverIdx, setCoverIdx] = useState(0)
 
   const run = async (task: (plan: ExportPlan) => Promise<void> | void) => {
     if (busy || disabled) return
@@ -45,7 +46,12 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
       {btn('玩家版 Word', () => void run((plan) => downloadPlayerDocx(plan.markdown, { title: plan.title })), 'player')}
       {btn('线索卡 Word', () => void run((plan) => downloadClueCardsDocx(plan.plan, plan.title)), 'clues')}
       {btn('下载 .md', () => void run((plan) => downloadMarkdown(plan.markdown, plan.title)), 'md')}
-      {btn('下载封面', () => void run((plan) => downloadCoverPNG({ title: plan.title, lockScore: plan.lockScore })), 'cover')}
+      {btn(`封面·${COVER_STYLES[coverIdx].label}`, () => {
+        const style: CoverStyle = COVER_STYLES[coverIdx].key
+        const result = run((plan) => downloadCoverPNG({ title: plan.title, lockScore: plan.lockScore }, style))
+        setCoverIdx((i) => (i + 1) % COVER_STYLES.length)
+        return result
+      }, 'cover')}
       {busy && <span className="export-msg">正在导出…</span>}
       {!busy && message && <span className="export-msg">{message}</span>}
     </div>
