@@ -350,6 +350,143 @@ async def _handle_history(store: Any, conversation_id: str) -> dict[str, Any]:
     return {"messages": output}
 
 
+def _md_rows(text: str) -> list[list[str]]:
+    """解析 Markdown 表格行为二维数组，自动跳过分隔行。"""
+    rows: list[list[str]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if cells and all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
+            continue
+        if any(c for c in cells):
+            rows.append(cells)
+    return rows
+
+
+def _md_section(md: str, name: str) -> str:
+    match = re.search(rf"^##\s*{re.escape(name)}[^\n]*\n(.*?)(?=^##\s|\Z)", md, re.M | re.S)
+    return match.group(1) if match else ""
+
+
+def _md_subsection(md: str, name: str) -> str:
+    match = re.search(rf"^###\s*{re.escape(name)}[^\n]*\n(.*?)(?=^##[#]?[^\n]|\Z)", md, re.M | re.S)
+    return match.group(1) if match else ""
+
+
+def _md_table_after(md: str, name: str) -> str:
+    """取「name 小节」之后的表格文本；小节缺失时从 name 之后全局找第一张表。"""
+    text = _md_subsection(md, name)
+    if _md_rows(text):
+        return text
+    match = re.search(rf"{re.escape(name)}[^\n]*\n(.*?)(?=^##[#]?[^\n]|\Z)", md, re.M | re.S)
+    return match.group(1) if match else text
+
+
+def _rows_to_objects(rows: list[list[str]]) -> list[dict[str, str]]:
+    """把表头为「字段/字段/…」的表格转成对象列表。"""
+    if len(rows) < 2:
+        return []
+    header = [h.replace("*", "").strip() for h in rows[0]]
+    return [
+        {header[i]: cells[i] for i in range(min(len(header), len(cells))) if header[i]}
+        for cells in rows[1:]
+    ]
+
+
+def _parse_plan_from_markdown(md: str) -> dict[str, Any]:
+    """从流式 Markdown 正文解析沉浸模式/线索卡所需的结构化数据。
+
+    提取节点失败时的兜底：正文一定存在，解析失败也只是字段少一点。
+    """
+    plan: dict[str, Any] = {}
+
+    title_match = re.search(r"^#\s*[《\"]?([^《》\n]{2,40})[》\"]?", md, re.M)
+    if title_match:
+        plan["title"] = title_match.group(1).strip()
+    tagline_match = re.search(r"^>\s*([^>\n]{6,60})$", md, re.M)
+    if tagline_match and "声明" not in tagline_match.group(1):
+        plan["tagline"] = tagline_match.group(1).strip()
+
+    # 背景与死者（第二节）
+    body = _md_section(md, "二")
+    if body:
+        paras = [p.strip() for p in re.split(r"\n\s*\n|\n(?=[^\n|]{8,}：)", body) if p.strip() and not p.strip().startswith("|")]
+        plan["background"] = "\n".join(paras)[:800]
+        victim_text = "\n".join(
+            line.strip() for line in body.splitlines() if line.strip() and not line.strip().startswith("|")
+        )
+        victim: dict[str, str] = {}
+        for pattern, key in (
+            (r"死者[：:]\s*([^\n，,（(。]{2,12})", "name"),
+            (r"身份[：:]\s*([^\n]{2,30})", "identity"),
+            (r"死亡时间[：:]\s*([^\n]{2,20})", "death_time"),
+            (r"现场[：:]\s*([^\n]{2,80})", "scene"),
+            (r"发现[：:]\s*([^\n]{2,60})", "found_by"),
+        ):
+            m = re.search(pattern, victim_text)
+            if m:
+                victim[key] = m.group(1).strip()
+        if victim:
+            plan["victim"] = victim
+
+    # 凶手与角色（第四节；分段生成时「## 四」标题可能省略，直接全局找子标题）
+    culprit_text = _md_subsection(md, "凶手")
+    if culprit_text:
+        name_match = (
+            re.search(r"凶手[：:]\s*([^\n，,（(。]{2,12})", culprit_text)
+            or re.search(r"凶手[：:]\s*([^\n，,（(。]{2,12})", md)
+            or re.match(r"^\s*([^\n，,（(。：:]{2,12})", culprit_text)
+        )
+        plan["culprit"] = {
+            "character": name_match.group(1).strip() if name_match else "",
+            "motive": culprit_text[:400],
+        }
+    char_table = _rows_to_objects(_md_rows(_md_table_after(md, "角色表")))
+    plan["characters"] = [
+        {
+            "name": row.get("角色") or row.get("姓名") or row.get("名字") or "",
+            "identity": row.get("身份") or "",
+            "secret": row.get("秘密") or "",
+            "suspicion": row.get("被怀疑点") or row.get("怀疑点") or "",
+        }
+        for row in char_table
+    ]
+
+    # 线索（第五节）
+    for key, sub in (("clues_public", "公开线索"), ("clues_deep", "深入线索")):
+        rows = _rows_to_objects(_md_rows(_md_table_after(md, sub)))
+        plan[key] = [
+            {
+                "id": row.get("编号") or "",
+                "name": row.get("线索") or row.get("名称") or row.get("线索内容") or "",
+                "content": row.get("线索内容") or row.get("内容") or row.get("线索") or "",
+                "points_to": row.get("指向或排除") or row.get("指向") or "",
+                "access": row.get("获取方式") or "",
+                "why_fair": row.get("为什么公平") or "",
+            }
+            for row in rows
+        ]
+
+    # 时间线（第六节）
+    tl_rows = _rows_to_objects(_md_rows(_md_section(md, "六")))
+    plan["timeline"] = [
+        {
+            "time": row.get("时间") or "",
+            "event": row.get("事件") or "",
+            "witness": row.get("可验证方式") or row.get("可验证") or "",
+            "visibility": "深入" if "深入" in (row.get("公开或深入") or "") else "公开",
+        }
+        for row in tl_rows
+    ]
+
+    score_match = re.search(r"锁凶充分性评分[：:]\s*(\d{1,3})\s*/\s*100", md)
+    if score_match:
+        plan["lock_score"] = int(score_match.group(1))
+    return plan
+
+
 async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
     """导出当前会话最后一版完整方案（优先取非 partial 的最长 assistant 消息）。"""
     try:
@@ -386,6 +523,12 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
 
     if not best.get("markdown"):
         return {"error": "当前会话还没有可导出的完整方案。先生成一次方案再导出。"}
+
+    if not plan:
+        # 结构化提取失败时，直接从 Markdown 正文解析，保证沉浸模式/线索卡可用
+        plan = _parse_plan_from_markdown(best["markdown"])
+        if lock_score is None and plan.get("lock_score") is not None:
+            lock_score = plan.get("lock_score")
 
     return {
         "title": title or "未命名诡计方案",
