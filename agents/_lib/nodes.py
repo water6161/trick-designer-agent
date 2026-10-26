@@ -81,10 +81,9 @@ async def _invoke_structured(
     model: Any,
     schema: type[BaseModel],
     messages: list[Any],
-    timeout: float,
-    max_attempts: int = 2,
+    timeouts: list[float],
 ) -> BaseModel:
-    """通过 function call 取结构化结果，失败时重试并做 JSON 兜底解析。"""
+    """通过 function call 取结构化结果；按 timeouts 逐次尝试，失败做 JSON 兜底。"""
     tool = {
         "type": "function",
         "function": {
@@ -100,7 +99,9 @@ async def _invoke_structured(
     working = list(messages)
 
     last_error: str = ""
+    max_attempts = len(timeouts)
     for attempt in range(max_attempts):
+        timeout = timeouts[attempt]
         try:
             response = await asyncio.wait_for(bound.ainvoke(working), timeout=timeout)
         except (asyncio.TimeoutError, TimeoutError):
@@ -144,6 +145,8 @@ async def _invoke_structured(
                     content=(
                         "上一次没有按要求返回结构化结果。请立即调用 emit_result 工具，"
                         "严格按给定 JSON Schema 填写，不要输出解释文字。"
+                        "时间有限，内容务必精简：公开线索3条、深入线索2条、时间线4条、角色4人，"
+                        "每条一两句话点到为止。"
                     )
                 ),
             ]
@@ -186,7 +189,7 @@ async def understand(
     ]
 
     patch: BriefPatch = await _invoke_structured(  # type: ignore[assignment]
-        model, BriefPatch, messages, timeout=90
+        model, BriefPatch, messages, timeouts=[90, 60]
     )
 
     brief = dict(state.get("brief") or {})
@@ -281,7 +284,7 @@ async def design(
     ]
 
     plan: DesignPlan = await _invoke_structured(  # type: ignore[assignment]
-        model, DesignPlan, messages, timeout=100, max_attempts=2
+        model, DesignPlan, messages, timeouts=[140, 110]
     )
     writer({"event": "status", "stage": "designed", "label": f"诡计「{plan.core_trick.name}」已成型"})
 
@@ -325,7 +328,7 @@ async def audit(
 
     try:
         result: FairnessAudit = await _invoke_structured(  # type: ignore[assignment]
-            model, FairnessAudit, messages, timeout=180
+            model, FairnessAudit, messages, timeouts=[120, 90]
         )
         data = result.model_dump()
         writer(
