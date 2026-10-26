@@ -1471,6 +1471,33 @@ textarea {
   opacity: 0.4;
 }
 
+.immersive-fab {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 90;
+  background: linear-gradient(135deg, #7e1416, #4a0d1a);
+  border: 1px solid rgba(216, 181, 106, 0.55);
+  color: #e8c98a;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 18px rgba(126, 20, 22, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.immersive-fab:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 26px rgba(126, 20, 22, 0.65);
+}
+
+.immersive-fab:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .imm-overlay {
   position: fixed;
   inset: 0;

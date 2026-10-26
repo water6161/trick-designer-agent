@@ -327,6 +327,17 @@ export default function App() {
         />
       )}
 
+      {hasPlan && !streaming && !immersive && (
+        <button
+          className="immersive-fab"
+          onClick={() => setImmersive(true)}
+          disabled={loading}
+          aria-label="进入沉浸模式"
+        >
+          🌙 沉浸模式
+        </button>
+      )}
+
         {streaming && <StageProgress stage={stage} />}
 
         <ExportBar conversationId={activeId} hasPlan={hasPlan && !streaming} disabled={loading} />
