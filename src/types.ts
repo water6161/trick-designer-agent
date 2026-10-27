@@ -35,10 +35,18 @@ export interface TimelineEvent {
   visibility?: string
 }
 
+export interface PlanCharacter {
+  name?: string
+  identity?: string
+  secret?: string
+  suspicion?: string
+}
+
 export interface PlanData {
   title?: string
   clues_public?: ClueData[]
   clues_deep?: ClueData[]
+  characters?: PlanCharacter[]
   timeline?: TimelineEvent[]
   culprit?: { character?: string; motive?: string } | null
   hidden_ending?: { scene?: string; ending?: string } | null

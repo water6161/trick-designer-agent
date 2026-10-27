@@ -10,6 +10,8 @@ import Welcome from './components/Welcome'
 import Shelf from './components/Shelf'
 import TimelineView from './components/TimelineView'
 import DMView from './components/DMView'
+import RoleCards from './components/RoleCards'
+import RescuePanel from './components/RescuePanel'
 import { MenuIcon } from './components/icons'
 import {
   deleteSession,
@@ -41,6 +43,8 @@ export default function App() {
   const [shelfItems, setShelfItems] = useState<ShelfItem[]>(() => listShelf())
   const [showTimeline, setShowTimeline] = useState(false)
   const [showDM, setShowDM] = useState(false)
+  const [showRoles, setShowRoles] = useState(false)
+  const [showRescue, setShowRescue] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -299,6 +303,8 @@ export default function App() {
   const headerTitle = activeSession?.title || (messages.length > 0 ? '新剧本' : '新对话')
   const loading = hydrating || hydratingHistory
   const hasPlan = messages.some((item) => item.role === 'assistant' && item.content.length > 200)
+  const latestMarkdown =
+    [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
 
   return (
     <div className="app">
@@ -328,6 +334,12 @@ export default function App() {
         <div className="topbar-actions">
           {hasPlan && !streaming && (
             <>
+              <button className="immersive-btn" onClick={() => setShowRescue(true)} disabled={loading}>
+                🆘 救场
+              </button>
+              <button className="immersive-btn" onClick={() => setShowRoles(true)} disabled={loading}>
+                🃏 角色卡
+              </button>
               <button className="immersive-btn" onClick={() => setShowDM(true)} disabled={loading}>
                 🎭 主持台
               </button>
@@ -352,29 +364,25 @@ export default function App() {
       {immersive && hasPlan && (
         <ImmersiveView
           conversationId={activeId}
-          fallbackMarkdown={
-            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
-          }
+          fallbackMarkdown={latestMarkdown}
           onClose={() => setImmersive(false)}
         />
       )}
 
       {showTimeline && hasPlan && (
-        <TimelineView
-          markdown={
-            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
-          }
-          onClose={() => setShowTimeline(false)}
-        />
+        <TimelineView markdown={latestMarkdown} onClose={() => setShowTimeline(false)} />
       )}
 
       {showDM && hasPlan && (
-        <DMView
-          markdown={
-            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
-          }
-          onClose={() => setShowDM(false)}
-        />
+        <DMView markdown={latestMarkdown} onClose={() => setShowDM(false)} />
+      )}
+
+      {showRescue && hasPlan && (
+        <RescuePanel markdown={latestMarkdown} onClose={() => setShowRescue(false)} />
+      )}
+
+      {showRoles && hasPlan && (
+        <RoleCards markdown={latestMarkdown} onClose={() => setShowRoles(false)} />
       )}
 
       {shelfOpen && (
