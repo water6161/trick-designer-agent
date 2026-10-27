@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
-import { copyText, COVER_STYLES, downloadAICoverPNG, downloadClueCardsDocx, downloadCoverPNG, downloadDocx, downloadMarkdown, downloadPlayerDocx, type CoverStyle } from '../lib/exporters'
+import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
+/** docx 导出库体积较大，按需动态加载，避免拖慢首屏。 */
+const loadDocx = () => import('../lib/docxExporters')
 import { aiCover } from '../lib/api'
 
 interface Props {
@@ -59,9 +61,9 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     <div className="export-bar">
       <span className="export-label">开本稿</span>
       {btn('复制全文', () => void run((plan) => { void copyText(plan.markdown) }), 'copy')}
-      {btn('下载 Word', () => void run((plan) => downloadDocx(plan.markdown, { title: plan.title, lockScore: plan.lockScore })), 'docx')}
-      {btn('玩家版 Word', () => void run((plan) => downloadPlayerDocx(plan.markdown, { title: plan.title })), 'player')}
-      {btn('线索卡 Word', () => void run((plan) => downloadClueCardsDocx(plan.plan, plan.title)), 'clues')}
+      {btn('下载 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadDocx(plan.markdown, { title: plan.title, lockScore: plan.lockScore }) }), 'docx')}
+      {btn('玩家版 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadPlayerDocx(plan.markdown, { title: plan.title }) }), 'player')}
+      {btn('线索卡 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadClueCardsDocx(plan.plan, plan.title) }), 'clues')}
       {btn('下载 .md', () => void run((plan) => downloadMarkdown(plan.markdown, plan.title)), 'md')}
       {btn(`封面·${COVER_STYLES[coverIdx].label}`, () => {
         const style: CoverStyle = COVER_STYLES[coverIdx].key
