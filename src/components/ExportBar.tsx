@@ -2,9 +2,15 @@ import { useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
 import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
+import { aiCover, type AICoverStyle } from '../lib/api'
+
+const AI_COVER_STYLES: { key: AICoverStyle; label: string }[] = [
+  { key: 'character', label: '人物海报' },
+  { key: 'group', label: '群像剪影' },
+  { key: 'scene', label: '场景氛围' },
+]
 /** docx 导出库体积较大，按需动态加载，避免拖慢首屏。 */
 const loadDocx = () => import('../lib/docxExporters')
-import { aiCover } from '../lib/api'
 
 interface Props {
   conversationId: string
@@ -16,6 +22,7 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [coverIdx, setCoverIdx] = useState(0)
+  const [aiIdx, setAiIdx] = useState(0)
 
   const run = async (task: (plan: ExportPlan) => Promise<void> | void) => {
     if (busy || disabled) return
@@ -71,8 +78,9 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
         setCoverIdx((i) => (i + 1) % COVER_STYLES.length)
         return result
       }, 'cover')}
-      {btn('✨ AI 封面', () => void runCover(async (plan) => {
-        const { image } = await aiCover(conversationId)
+      {btn(`✨ AI 封面·${AI_COVER_STYLES[aiIdx].label}`, () => void runCover(async (plan) => {
+        const style = AI_COVER_STYLES[aiIdx].key
+        const { image } = await aiCover(conversationId, style)
         downloadAICoverPNG(image, {
           title: plan.title,
           genre: plan.brief?.genre,
@@ -80,6 +88,7 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
           difficulty: plan.brief?.difficulty,
           lockScore: plan.lockScore,
         })
+        setAiIdx((i) => (i + 1) % AI_COVER_STYLES.length)
       }), 'aicover')}
       {busy && <span className="export-msg">正在导出…</span>}
       {!busy && message && <span className="export-msg">{message}</span>}

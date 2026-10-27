@@ -540,11 +540,12 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
     }
 
 
-async def _handle_ai_cover(env: Any, store: Any, conversation_id: str) -> dict[str, Any]:
+async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: str = "character") -> dict[str, Any]:
     """调用通义万相生成 AI 封面插画，返回 base64 图片（前端再叠加标题文字）。
 
     走 DashScope 异步文生图接口：建任务 → 轮询 → 取图 → 转 base64。
     任何一步失败都返回友好 error，不影响其他功能。
+    style: character=人物海报 / group=群像剪影 / scene=场景氛围
     """
     import base64
 
@@ -559,13 +560,30 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str) -> dict[s
     title = str(export.get("title") or "未命名诡计方案")[:24]
     brief = export.get("brief") or {}
     genre = str(brief.get("genre") or "")
-    mood = str(brief.get("difficulty") or "")
-    prompt = (
-        f"剧本杀游戏封面插画，{title}，{genre}题材，悬疑惊悚氛围，"
-        "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
-        " nosieur级插画画质，画面中不要出现任何文字、字母或水印"
-    ).replace(" nosieur级插画画质", "高清大师级插画画质")
-    negative = "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形"
+    era = str(brief.get("era") or brief.get("background") or "")
+    era_part = f"，{era}背景" if era else ""
+    if style == "group":
+        prompt = (
+            f"剧本杀群像海报插画，{genre}题材{era_part}，五到六位嫌疑人呈弧形站位，"
+            "每位人物剪影与光影交错、身份神态各异：有人低头掩面、有人回眸冷视、有人手持关键证物，"
+            "中央留出标题空间，深蓝夜色与暗红色调，电影级群像打光，戏剧性构图，"
+            "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
+        )
+    elif style == "scene":
+        prompt = (
+            f"剧本杀游戏封面插画，{title}，{genre}题材，悬疑惊悚氛围，"
+            "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
+            "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
+        )
+    else:  # character（默认）：主角人物海报
+        prompt = (
+            f"剧本杀人物海报插画，{genre}题材{era_part}，主角半身像特写：神秘人物立于阴影中，"
+            "面部半掩于明暗交界的光影里，眼神锐利意味深长，手中持有一件关键线索道具（怀表/信件/匕首），"
+            "服装与发型严格贴合题材时代背景，背景虚化处理并隐约有案发现场轮廓，"
+            "深蓝夜色与暗红色调，电影级伦勃朗人物打光，海报级构图，"
+            "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
+        )
+    negative = "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形, 多余手指, 面部扭曲"
 
     api_key = getattr(env, "api_key", "")
     base = str(getattr(env, "base_url", "")).replace("/compatible-mode/v1", "")
@@ -695,7 +713,10 @@ async def handler(context: Any):
     if action == "export":
         return await _handle_export(store, conversation_id)
     if action == "ai_cover":
-        return await _handle_ai_cover(env, store, conversation_id)
+        cover_style = str(body.get("cover_style") or "character")
+        if cover_style not in ("character", "group", "scene"):
+            cover_style = "character"
+        return await _handle_ai_cover(env, store, conversation_id, cover_style)
     if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
 

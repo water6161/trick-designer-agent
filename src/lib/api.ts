@@ -127,11 +127,13 @@ export interface ExportPlan {
   plan?: PlanData | null
 }
 
-export async function aiCover(conversationId: string): Promise<{ image: string; title: string }> {
+export type AICoverStyle = 'character' | 'group' | 'scene'
+
+export async function aiCover(conversationId: string, style: AICoverStyle = 'character'): Promise<{ image: string; title: string }> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',
     headers: headers(conversationId),
-    body: JSON.stringify({ action: 'ai_cover' }),
+    body: JSON.stringify({ action: 'ai_cover', cover_style: style }),
   })
   const data = (await readJson(response)) as Record<string, unknown>
   if (data.error) throw new Error(String(data.error))
