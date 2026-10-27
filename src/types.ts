@@ -28,10 +28,20 @@ export interface ClueData {
   why_fair?: string
 }
 
+export interface TimelineEvent {
+  time?: string
+  event?: string
+  witness?: string
+  visibility?: string
+}
+
 export interface PlanData {
   title?: string
   clues_public?: ClueData[]
   clues_deep?: ClueData[]
+  timeline?: TimelineEvent[]
+  culprit?: { character?: string; motive?: string } | null
+  hidden_ending?: { scene?: string; ending?: string } | null
   [key: string]: unknown
 }
 

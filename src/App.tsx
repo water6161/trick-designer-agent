@@ -7,6 +7,9 @@ import RequirementBuilder from './components/RequirementBuilder'
 import Sidebar from './components/Sidebar'
 import StageProgress from './components/StageProgress'
 import Welcome from './components/Welcome'
+import Shelf from './components/Shelf'
+import TimelineView from './components/TimelineView'
+import DMView from './components/DMView'
 import { MenuIcon } from './components/icons'
 import {
   deleteSession,
@@ -17,6 +20,7 @@ import {
   streamChat,
   streamRetry,
 } from './lib/api'
+import { listShelf, removeFromShelf, saveToShelf, planTitle, type ShelfItem } from './lib/shelf'
 import type { ChatMessage as ChatMessageType, SessionItem } from './types'
 
 export default function App() {
@@ -33,6 +37,10 @@ export default function App() {
   const [hydratingHistory, setHydratingHistory] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [immersive, setImmersive] = useState(false)
+  const [shelfOpen, setShelfOpen] = useState(false)
+  const [shelfItems, setShelfItems] = useState<ShelfItem[]>(() => listShelf())
+  const [showTimeline, setShowTimeline] = useState(false)
+  const [showDM, setShowDM] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -172,7 +180,20 @@ export default function App() {
         flushTimerRef.current = null
       }
       flushTokens()
-      setMessages((prev) => prev.filter((item) => item.id !== assistantId || item.content.trim().length > 0))
+      // 生成结束后自动把完整方案存入本地书架
+      setMessages((prev) => {
+        const filtered = prev.filter((item) => item.id !== assistantId || item.content.trim().length > 0)
+        const last = [...filtered].reverse().find((m) => m.role === 'assistant' && m.content.length > 500)
+        if (last) {
+          try {
+            saveToShelf({ id: activeId, title: planTitle(last.content), markdown: last.content, savedAt: Date.now() })
+            setShelfItems(listShelf())
+          } catch {
+            // 书架写入失败不影响主流程
+          }
+        }
+        return filtered
+      })
       setStreaming(false)
       setStage('')
       setStatus('')
@@ -306,10 +327,21 @@ export default function App() {
           </div>
         <div className="topbar-actions">
           {hasPlan && !streaming && (
-            <button className="immersive-btn" onClick={() => setImmersive(true)} disabled={loading}>
-              🌙 沉浸模式
-            </button>
+            <>
+              <button className="immersive-btn" onClick={() => setShowDM(true)} disabled={loading}>
+                🎭 主持台
+              </button>
+              <button className="immersive-btn" onClick={() => setShowTimeline(true)} disabled={loading}>
+                🔗 证据链
+              </button>
+              <button className="immersive-btn" onClick={() => setImmersive(true)} disabled={loading}>
+                🌙 沉浸模式
+              </button>
+            </>
           )}
+          <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
+            📚 往期案卷
+          </button>
           <div className={`status-pill ${streaming ? 'live' : ''}`}>
             <span className="dot" />
             {streaming ? status || '生成中' : loading ? '连接中' : '待命中'}
@@ -324,6 +356,35 @@ export default function App() {
             [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
           }
           onClose={() => setImmersive(false)}
+        />
+      )}
+
+      {showTimeline && hasPlan && (
+        <TimelineView
+          markdown={
+            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
+          }
+          onClose={() => setShowTimeline(false)}
+        />
+      )}
+
+      {showDM && hasPlan && (
+        <DMView
+          markdown={
+            [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
+          }
+          onClose={() => setShowDM(false)}
+        />
+      )}
+
+      {shelfOpen && (
+        <Shelf
+          items={shelfItems}
+          onClose={() => setShelfOpen(false)}
+          onDelete={(id) => {
+            removeFromShelf(id)
+            setShelfItems(listShelf())
+          }}
         />
       )}
 
