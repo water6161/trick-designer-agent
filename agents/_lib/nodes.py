@@ -141,16 +141,22 @@ async def _invoke_structured(
         )
 
         if attempt < max_attempts - 1:
+            # 按目标 schema 给不同的重试提示：轻量结构不需要「精简线索数」这类诱导
+            if schema is PlanDigest:
+                hint = (
+                    "上一次没有按要求返回结构化结果。请立即调用 emit_result 工具，"
+                    "严格按给定 JSON Schema 填写，不要输出解释文字。"
+                    "时间有限，内容务必精简：公开线索3条、深入线索2条、时间线4条、角色4人，"
+                    "每条一两句话点到为止。"
+                )
+            else:
+                hint = (
+                    "上一次没有按要求返回结构化结果。请立即调用 emit_result 工具，"
+                    "严格按给定 JSON Schema 填写，字段没有信息就留空，不要输出解释文字。"
+                )
             working = list(messages) + [
                 AIMessage(content=content or "（无内容）"),
-                HumanMessage(
-                    content=(
-                        "上一次没有按要求返回结构化结果。请立即调用 emit_result 工具，"
-                        "严格按给定 JSON Schema 填写，不要输出解释文字。"
-                        "时间有限，内容务必精简：公开线索3条、深入线索2条、时间线4条、角色4人，"
-                        "每条一两句话点到为止。"
-                    )
-                ),
+                HumanMessage(content=hint),
             ]
 
     raise RuntimeError(f"模型未返回合法的结构化结果：{last_error or '格式不符'}")
@@ -209,6 +215,24 @@ async def understand(
 
     intent = patch.intent
     qa = intent == "question"
+
+    # 兜底：明显的寒暄 / 能力咨询 / 纯提问，不该被当成「要一套新方案」
+    _chat_only = bool(
+        re.fullmatch(
+            r"[\s，。！？~～、,.!?]*(你好|您好|hi|hello|在吗|嗨|哈喽|你是谁|你能做什么|能干什么|怎么用|怎么玩|如何使用|帮助|help)[\s，。！？~～、,.!?]*",
+            user_text.strip(),
+            re.IGNORECASE,
+        )
+    )
+    _asks_how = bool(
+        re.search(r"(怎么|如何|能不能|可以|是否|为什么|什么|哪)", user_text)
+        and not re.search(r"(帮我|给我|写一|来一|做一|生成|出一)", user_text)
+        and len(user_text) <= 40
+    )
+    if (_chat_only or _asks_how) and intent == "new" and not state.get("design"):
+        intent = "question"
+        qa = True
+
     updates: dict[str, Any] = {"brief": brief, "intent": intent, "qa": qa, "pending": False}
 
     # 上一轮发了追问：本轮用户输入即回答，附进需求后正常出方案
@@ -242,6 +266,17 @@ async def understand(
         updates["research"] = []
         updates["design_markdown"] = ""
 
+    # 用户明确表示「不用追问 / 直接生成」时尊重其意愿，跳过追问环节
+    _skip_probe = bool(
+        re.search(
+            r"(不用|不要|别|无需|不必|免)(再)?(问|追问|确认)"
+            r"|直接(生成|出|写|做|开始)"
+            r"|(自己)?(决定|看着办|拿主意)"
+            r"|随意|随便你|你看着来|你看着办",
+            user_text,
+        )
+    )
+
     # 首次出完整方案且信息有空白时，先追问 2~3 个关键问题（回答后一次到位）
     if (
         intent == "new"
@@ -249,6 +284,7 @@ async def understand(
         and updates.get("mode") != "compare"
         and not state.get("pending")
         and not brief.get("answers")
+        and not _skip_probe
     ):
         try:
             probe: QuickQuestions = await _invoke_structured(  # type: ignore[assignment]
