@@ -44,11 +44,17 @@ export default function Welcome({ onPick }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const [tilt, setTilt] = useState({ x: 0, y: 0, gx: 50, gy: 30 })
 
-  // 鼠标跟随：卷宗轻微 3D 倾斜 + 光晕跟随
+  // 鼠标跟随：卷宗轻微 3D 倾斜 + 光晕跟随（用 rAF 节流，避免高频 mousemove 触发过多渲染）
   useEffect(() => {
     const node = sheetRef.current
     if (!node) return
-    const onMove = (event: MouseEvent) => {
+    let frame = 0
+    let pending: MouseEvent | null = null
+    const apply = () => {
+      frame = 0
+      const event = pending
+      pending = null
+      if (!event) return
       const rect = node.getBoundingClientRect()
       const px = (event.clientX - rect.left) / rect.width
       const py = (event.clientY - rect.top) / rect.height
@@ -59,10 +65,22 @@ export default function Welcome({ onPick }: Props) {
         gy: Math.max(0, Math.min(100, py * 100)),
       })
     }
-    const onLeave = () => setTilt({ x: 0, y: 0, gx: 50, gy: 30 })
+    const onMove = (event: MouseEvent) => {
+      pending = event
+      if (!frame) frame = requestAnimationFrame(apply)
+    }
+    const onLeave = () => {
+      if (frame) {
+        cancelAnimationFrame(frame)
+        frame = 0
+      }
+      pending = null
+      setTilt({ x: 0, y: 0, gx: 50, gy: 30 })
+    }
     node.addEventListener('mousemove', onMove)
     node.addEventListener('mouseleave', onLeave)
     return () => {
+      if (frame) cancelAnimationFrame(frame)
       node.removeEventListener('mousemove', onMove)
       node.removeEventListener('mouseleave', onLeave)
     }

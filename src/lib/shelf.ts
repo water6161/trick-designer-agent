@@ -8,7 +8,8 @@ export interface ShelfItem {
 }
 
 const KEY = 'tda_shelf_v1'
-const MAX = 12
+/** 单份方案最多写入的字符数，避免一份超长稿占满整个配额。 */
+const MAX_CHARS = 40000
 
 export function listShelf(): ShelfItem[] {
   try {
@@ -22,13 +23,23 @@ export function listShelf(): ShelfItem[] {
 }
 
 export function saveToShelf(item: ShelfItem): void {
-  try {
-    const rest = listShelf().filter((it) => it.id !== item.id)
-    const next = [item, ...rest].slice(0, MAX)
-    localStorage.setItem(KEY, JSON.stringify(next))
-  } catch {
-    // 存储已满或被禁用时静默放弃，不影响主流程
+  const trimmed: ShelfItem = {
+    ...item,
+    markdown: item.markdown.length > MAX_CHARS ? item.markdown.slice(0, MAX_CHARS) : item.markdown,
   }
+  const rest = listShelf().filter((it) => it.id !== trimmed.id)
+
+  // 逐份淘汰旧稿重试：配额不足时不会整次写入失败
+  for (let keep = rest.length; keep >= 0; keep -= 1) {
+    const next = [trimmed, ...rest.slice(0, keep)]
+    try {
+      localStorage.setItem(KEY, JSON.stringify(next))
+      return
+    } catch {
+      // 配额超限：继续减少保留份数
+    }
+  }
+  // 实在写不进去就放弃缓存，不影响主流程
 }
 
 export function removeFromShelf(id: string): void {
