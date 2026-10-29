@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { exportPlan } from '../lib/api'
 import { parsePlanFromMarkdown } from '../lib/parsePlan'
+import { isMuted, playDeathThud, playHeartbeat, playSafeChime, setMuted, unlockAudio } from '../lib/sound'
 import type { ClueData, PlanData } from '../types'
 
 interface Props {
@@ -30,6 +31,31 @@ function outcomeType(type: string): 'death' | 'risk' | 'safe' {
 }
 
 const CHOICE_SECONDS = 25
+const TENSE_SECONDS = 8
+
+/** 记录本地死亡记忆：同一剧本同一节点死过几次。 */
+function deathKey(plan: PlanData | null): string {
+  const t = String((plan as { title?: string } | null)?.title || 'unknown')
+  return `tda_imm_deaths_${t}`
+}
+
+function loadDeathMemory(key: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(key)
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {}
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveDeathMemory(key: string, memory: Record<string, number>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(memory))
+  } catch {
+    // 忽略
+  }
+}
 
 function InteractiveStage({ plan }: { plan: PlanData | null }) {
   const nodes = (Array.isArray(plan?.interactions) ? (plan!.interactions as InteractionNode[]) : []).filter(
@@ -40,6 +66,9 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
   const [deaths, setDeaths] = useState(0)
   const [outcome, setOutcome] = useState<{ type: 'death' | 'risk' | 'safe'; result: string } | null>(null)
   const [timeLeft, setTimeLeft] = useState(CHOICE_SECONDS)
+  const [shock, setShock] = useState(false)
+  const [muted, setMutedState] = useState(() => isMuted())
+  const [memory, setMemory] = useState<Record<string, number>>(() => loadDeathMemory(deathKey(plan)))
 
   // 限时抉择：每个节点 25 秒，超时直接判定死亡；展示结果时暂停
   useEffect(() => {
@@ -59,6 +88,43 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
     }
   }, [idx, outcome, nodes.length])
 
+  // 最后 8 秒：心跳逐渐加快
+  const tense = !outcome && idx < nodes.length && timeLeft <= TENSE_SECONDS && timeLeft > 0
+  const beatRef = useRef(0)
+  useEffect(() => {
+    if (!tense) {
+      beatRef.current = 0
+      return
+    }
+    const speed = 900 - (TENSE_SECONDS - timeLeft) * 90
+    const timer = window.setInterval(() => {
+      beatRef.current += 1
+      playHeartbeat(Math.min(1.4, 0.8 + beatRef.current * 0.1))
+    }, Math.max(360, speed))
+    playHeartbeat(0.9)
+    return () => window.clearInterval(timer)
+  }, [tense, timeLeft])
+
+  const triggerDeath = (result: string) => {
+    setOutcome({ type: 'death', result })
+    setShock(true)
+    playDeathThud()
+    const key = deathKey(plan)
+    const nodeKey = String(idx)
+    setMemory((prev) => {
+      const next = { ...prev, [nodeKey]: (prev[nodeKey] || 0) + 1 }
+      saveDeathMemory(key, next)
+      return next
+    })
+    window.setTimeout(() => setShock(false), 700)
+  }
+
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
+
   if (!nodes.length) {
     return (
       <div className="imm-center">
@@ -76,10 +142,30 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
           ? { title: '🌅 幸存者', desc: `你带着 ${deaths} 次死亡的记忆走到了最后。` }
           : { title: '🕯️ 九死一生', desc: `${deaths} 次死亡之后，你终于学会了用线索思考。` }
     const unlocked = deaths === 0 && hidden && hidden.ending
+    const totalChoice = nodes.length
     return (
       <div className="imm-center imm-text">
         <h2 className="imm-heading">{grade.title}</h2>
         <p className="imm-para">{grade.desc}</p>
+        {totalChoice > 0 && (
+          <div className="imm-candles" aria-label={`抉择 ${totalChoice} 次，死亡 ${deaths} 次`}>
+            {Array.from({ length: Math.min(totalChoice, 8) }).map((_, i) => (
+              <span
+                key={i}
+                className={`imm-candle ${i < Math.min(deaths, totalChoice) ? 'out' : 'lit'}`}
+                style={{ animationDelay: `${i * 0.12}s` }}
+              >
+                {i < Math.min(deaths, totalChoice) ? '🕯️' : '🔥'}
+              </span>
+            ))}
+          </div>
+        )}
+        {totalChoice > 0 && (
+          <p className="imm-para imm-hint imm-candle-note">
+            共 {totalChoice} 次抉择，熄灭了 {deaths} 盏
+            {deaths === 0 ? '——一盏未灭。' : '。'}
+          </p>
+        )}
         {unlocked ? (
           <>
             <p className="imm-eyebrow imm-hidden-label">🔮 隐藏真结局已解锁</p>
@@ -111,49 +197,83 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
 
   if (outcome) {
     if (outcome.type === 'death') {
+      const nodeKey = String(idx)
+      const times = memory[nodeKey] || 1
       return (
-        <div className="imm-center">
-          <p className="imm-eyebrow imm-death-label">💀 死亡结局</p>
-          <h2 className="imm-heading">你已出局</h2>
-          <p className="imm-para">{outcome.result}</p>
-          <p className="imm-para imm-hint">死亡不是终点——回到抉择，用线索重新判断。（本轮死亡 +1）</p>
-          <button
-            className="imm-btn"
-            onClick={() => {
-              setDeaths((d) => d + 1)
-              setOutcome(null)
-            }}
-          >
-            重新抉择
-          </button>
-        </div>
+        <>
+          <div className={`imm-blood ${shock ? 'shock' : ''}`} aria-hidden="true" />
+          <div className="imm-center imm-death">
+            <p className="imm-eyebrow imm-death-label">💀 死亡结局</p>
+            <h2 className="imm-heading imm-death-title">你已出局</h2>
+            <p className="imm-para">{outcome.result}</p>
+            {times > 1 && (
+              <p className="imm-para imm-death-memory">
+                你已经在同一处倒下 {times} 次——这条路走不通，换个方向想想线索。
+              </p>
+            )}
+            <p className="imm-para imm-hint">死亡不是终点——回到抉择，用线索重新判断。（本轮死亡 +1）</p>
+            <div className="imm-death-actions">
+              <button
+                className="imm-btn imm-btn-danger"
+                onClick={() => {
+                  setDeaths((d) => d + 1)
+                  setOutcome(null)
+                }}
+              >
+                重新抉择
+              </button>
+              <button className="imm-mute" onClick={toggleMute} aria-label="切换音效">
+                {muted ? '🔇 音效关' : '🔊 音效开'}
+              </button>
+            </div>
+          </div>
+        </>
       )
     }
     return (
       <div className="imm-center">
         <p className="imm-eyebrow">{outcome.type === 'risk' ? '⚠️ 侥幸过关' : '✅ 平安'}</p>
         <p className="imm-para">{outcome.result}</p>
-        {idx < nodes.length - 1 && (
-          <button className="imm-btn" onClick={() => { setOutcome(null); setIdx((v) => v + 1) }}>
-            继续
+        <div className="imm-death-actions">
+          {idx < nodes.length - 1 && (
+            <button
+              className="imm-btn"
+              onClick={() => {
+                setOutcome(null)
+                setIdx((v) => v + 1)
+              }}
+            >
+              继续
+            </button>
+          )}
+          {idx >= nodes.length - 1 && (
+            <button
+              className="imm-btn"
+              onClick={() => {
+                setOutcome(null)
+                setIdx((v) => v + 1)
+              }}
+            >
+              迎接结局
+            </button>
+          )}
+          <button className="imm-mute" onClick={toggleMute} aria-label="切换音效">
+            {muted ? '🔇 音效关' : '🔊 音效开'}
           </button>
-        )}
-        {idx >= nodes.length - 1 && (
-          <button className="imm-btn" onClick={() => { setOutcome(null); setIdx((v) => v + 1) }}>
-            迎接结局
-          </button>
-        )}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="imm-center imm-text">
-      <div className="imm-timer" role="timer">
+    <div className={`imm-center imm-text ${tense ? 'imm-tense' : ''}`}>
+      <div className={`imm-timer ${tense ? 'tense' : ''}`} role="timer">
         <div className="imm-timer-bar" style={{ width: `${(timeLeft / CHOICE_SECONDS) * 100}%` }} />
       </div>
       <p className="imm-eyebrow">
-        抉择 {idx + 1} / {nodes.length} · {node.title} · ⏳ {timeLeft}s
+        抉择 {idx + 1} / {nodes.length} · {node.title} ·{' '}
+        <span className={tense ? 'imm-count urgent' : 'imm-count'}>⏳ {timeLeft}s</span>
+        {memory[String(idx)] ? <span className="imm-risk-mark"> · 此处曾倒下 {memory[String(idx)]} 次</span> : null}
       </p>
       {node.scene
         .split('\n')
@@ -170,12 +290,24 @@ function InteractiveStage({ plan }: { plan: PlanData | null }) {
             key={i}
             className="imm-choice imm-fade"
             style={{ animationDelay: `${0.3 + i * 0.15}s` }}
-            onClick={() => setOutcome({ type: outcomeType(opt.type), result: opt.result || opt.text })}
+            onClick={() => {
+              unlockAudio()
+              const type = outcomeType(opt.type)
+              if (type === 'death') {
+                triggerDeath(opt.result || opt.text)
+              } else {
+                setOutcome({ type, result: opt.result || opt.text })
+                if (type === 'safe') playSafeChime()
+              }
+            }}
           >
             {opt.text}
           </button>
         ))}
       </div>
+      <button className="imm-mute imm-mute-fixed" onClick={toggleMute} aria-label="切换音效">
+        {muted ? '🔇' : '🔊'}
+      </button>
     </div>
   )
 }
