@@ -563,13 +563,12 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
     era = str(brief.get("era") or brief.get("background") or "")
     era_part = f"，{era}背景" if era else ""
     if style == "group":
-        # 分格半身构图：每张脸都大而清晰，规避多人小脸画崩的问题
+        # 电影剧照式群像：围桌单一光源构图，人脸自然且光影统一
         prompt = (
-            f"日系动漫风格剧本杀海报插画，精致二次元五官，细腻的脸部刻画，{genre}题材{era_part}，"
-            "四位嫌疑人分格半身构图，人物仅上半身入画、面部占画面比例大且清晰，"
-            "年龄性别身份各不相同，服装贴合时代背景，"
-            "神态各异：有人镇定自若、有人眼神闪躲、有人强作微笑，"
-            "深蓝夜色与暗红色调，电影级打光，高清插画画质，画面中不要出现任何文字或水印"
+            f"电影级剧照，{genre}题材{era_part}悬疑群像，昏暗餐厅长桌旁围坐五人，"
+            "五人年龄性别身份各不相同、服装贴合时代背景，各怀心思互不对视，"
+            "烛光单一光源从桌面升起照亮各人面部，背景深色木墙与阴影，"
+            "胶片颗粒，褪色色调，强烈明暗对比，摄影级画质，画面留有顶部标题空间，画面中无任何文字水印"
         )
     elif style == "scene":
         prompt = (
@@ -577,18 +576,21 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
             "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
             "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
         )
-    else:  # character（默认）：主角人物海报
+    else:  # character（默认）：主角人物海报，电影剧照风
         prompt = (
-            f"日系动漫风格剧本杀人物海报插画，精致二次元五官，细腻的脸部刻画，{genre}题材{era_part}，"
-            "主角半身像特写：神秘人物立于阴影中，面部半掩于明暗交界的光影里，"
-            "眼神锐利意味深长，手中持有一件关键线索道具（怀表/信件/匕首），"
-            "服装与发型严格贴合题材时代背景，背景虚化处理并隐约有案发现场轮廓，"
-            "深蓝夜色与暗红色调，电影级伦勃朗人物打光，海报级构图，"
-            "高清插画画质，画面中不要出现任何文字、字母或水印"
+            f"电影级剧本杀海报，{genre}题材{era_part}悬疑剧照风格，一位主角半身特写占据画面右侧三分之二，"
+            "侧身回望镜头，眼神沉静而锐利，右手握着一件关键线索道具（怀表/信件/匕首），"
+            "单一冷光从左上方打在脸侧，另半边脸沉入阴影，"
+            "背景是虚化的老宅走廊与暗红帷幔，强烈明暗对比，"
+            "胶片颗粒质感，褪色色调，画面留有干净的标题区，"
+            "高度写实，摄影级画质，画面中无任何文字水印"
         )
-    negative = "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形, 多余手指, 面部扭曲, 写实人脸, 照片写实风格, 脸部畸形, 五官错位, 眼睛不对称"
-    # 有人物时用更强的 wan2.2-plus 模型（脸更稳），纯场景用高速 turbo
-    model = "wan2.2-t2i-plus" if style in ("character", "group") else "wanx2.1-t2i-turbo"
+    negative = (
+        "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形, 多余手指, 面部扭曲, 脸部畸形, 五官错位"
+        + (", 卡通, 动漫, 二次元, 平面插画, 拼贴, 分格" if style != "scene" else "")
+    )
+    # 有人物时用 wan2.5（电影剧照质感最稳），纯场景用高速 turbo
+    model = "wan2.5-t2i-preview" if style in ("character", "group") else "wanx2.1-t2i-turbo"
 
     api_key = getattr(env, "api_key", "")
     base = str(getattr(env, "base_url", "")).replace("/compatible-mode/v1", "")
@@ -601,7 +603,7 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
             json={
                 "model": model,
                 "input": {"prompt": prompt, "negative_prompt": negative},
-                "parameters": {"n": 1, "size": "720*960", "prompt_extend": True},
+                "parameters": {"n": 1, "size": "960*1280" if style != "scene" else "720*960", "prompt_extend": True},
             },
             timeout=30,
         )
