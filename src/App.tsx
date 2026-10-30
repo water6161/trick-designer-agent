@@ -45,6 +45,7 @@ export default function App() {
   const [showDM, setShowDM] = useState(false)
   const [showRoles, setShowRoles] = useState(false)
   const [showRescue, setShowRescue] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -131,6 +132,17 @@ export default function App() {
     const timer = window.setTimeout(() => setNotice(''), 6000)
     return () => window.clearTimeout(timer)
   }, [notice])
+
+  // 点击下拉外部时关闭工具菜单
+  useEffect(() => {
+    if (!toolsOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.tools-menu')) setToolsOpen(false)
+    }
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
+  }, [toolsOpen])
 
   useEffect(() => {
     if (!stickRef.current) return
@@ -334,25 +346,26 @@ export default function App() {
         <div className="topbar-actions">
           {hasPlan && !streaming && (
             <>
-              <button className="immersive-btn" onClick={() => setShowRescue(true)} disabled={loading}>
-                🆘 救场
-              </button>
-              <button className="immersive-btn" onClick={() => setShowRoles(true)} disabled={loading}>
-                🃏 角色卡
-              </button>
-              <button className="immersive-btn" onClick={() => setShowDM(true)} disabled={loading}>
-                🎭 主持台
-              </button>
-              <button className="immersive-btn" onClick={() => setShowTimeline(true)} disabled={loading}>
-                🔗 证据链
-              </button>
               <button className="immersive-btn" onClick={() => setImmersive(true)} disabled={loading}>
                 🌙 沉浸模式
               </button>
+              <div className="tools-menu">
+                <button className="immersive-btn" onClick={() => setToolsOpen((v) => !v)}>
+                  🛠 工具 {toolsOpen ? '▴' : '▾'}
+                </button>
+                {toolsOpen && (
+                  <div className="tools-dropdown">
+                    <button onClick={() => { setToolsOpen(false); setShowDM(true) }}>🎭 DM 主持台</button>
+                    <button onClick={() => { setToolsOpen(false); setShowTimeline(true) }}>🔗 证据链时间线</button>
+                    <button onClick={() => { setToolsOpen(false); setShowRoles(true) }}>🃏 角色速览卡</button>
+                    <button onClick={() => { setToolsOpen(false); setShowRescue(true) }}>🆘 救场手册</button>
+                  </div>
+                )}
+              </div>
             </>
           )}
           <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
-            📚 往期案卷
+            📚 案卷
           </button>
           <div className={`status-pill ${streaming ? 'live' : ''}`}>
             <span className="dot" />

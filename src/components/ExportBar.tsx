@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
 import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
@@ -64,32 +64,68 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     }
   }
 
+  const [moreOpen, setMoreOpen] = useState(false)
+
+  // 点击下拉外部时关闭
+  useEffect(() => {
+    if (!moreOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.export-more')) setMoreOpen(false)
+    }
+    document.addEventListener('click', onDoc)
+    return () => document.removeEventListener('click', onDoc)
+  }, [moreOpen])
+
   return (
     <div className="export-bar">
       <span className="export-label">开本稿</span>
       {btn('复制全文', () => void run((plan) => { void copyText(plan.markdown) }), 'copy')}
       {btn('下载 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadDocx(plan.markdown, { title: plan.title, lockScore: plan.lockScore }) }), 'docx')}
-      {btn('玩家版 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadPlayerDocx(plan.markdown, { title: plan.title }) }), 'player')}
-      {btn('线索卡 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadClueCardsDocx(plan.plan, plan.title) }), 'clues')}
-      {btn('下载 .md', () => void run((plan) => downloadMarkdown(plan.markdown, plan.title)), 'md')}
-      {btn(`封面·${COVER_STYLES[coverIdx].label}`, () => {
-        const style: CoverStyle = COVER_STYLES[coverIdx].key
-        const result = run((plan) => downloadCoverPNG({ title: plan.title, lockScore: plan.lockScore }, style))
-        setCoverIdx((i) => (i + 1) % COVER_STYLES.length)
-        return result
-      }, 'cover')}
-      {btn(`✨ AI 封面·${AI_COVER_STYLES[aiIdx].label}`, () => void runCover(async (plan) => {
-        const style = AI_COVER_STYLES[aiIdx].key
-        const { image } = await aiCover(conversationId, style)
-        downloadAICoverPNG(image, {
-          title: plan.title,
-          genre: plan.brief?.genre,
-          players: plan.brief?.players,
-          difficulty: plan.brief?.difficulty,
-          lockScore: plan.lockScore,
-        })
-        setAiIdx((i) => (i + 1) % AI_COVER_STYLES.length)
-      }), 'aicover')}
+      <div className="export-more">
+        <button className="export-btn" onClick={() => setMoreOpen((v) => !v)} disabled={busy || disabled}>
+          更多导出 {moreOpen ? '▴' : '▾'}
+        </button>
+        {moreOpen && (
+          <div className="export-menu">
+            <button onClick={() => { setMoreOpen(false); void run(async (plan) => { const d = await loadDocx(); await d.downloadPlayerDocx(plan.markdown, { title: plan.title }) }) }}>
+              玩家版 Word
+            </button>
+            <button onClick={() => { setMoreOpen(false); void run(async (plan) => { const d = await loadDocx(); await d.downloadClueCardsDocx(plan.plan, plan.title) }) }}>
+              线索卡 Word
+            </button>
+            <button onClick={() => { setMoreOpen(false); void run((plan) => downloadMarkdown(plan.markdown, plan.title)) }}>
+              下载 .md
+            </button>
+            <button onClick={() => {
+              setMoreOpen(false)
+              const style: CoverStyle = COVER_STYLES[coverIdx].key
+              const result = run((plan) => downloadCoverPNG({ title: plan.title, lockScore: plan.lockScore }, style))
+              setCoverIdx((i) => (i + 1) % COVER_STYLES.length)
+              void result
+            }}>
+              封面·{COVER_STYLES[coverIdx].label}
+            </button>
+            <button className="export-menu-ai" onClick={() => {
+              setMoreOpen(false)
+              void runCover(async (plan) => {
+                const style = AI_COVER_STYLES[aiIdx].key
+                const { image } = await aiCover(conversationId, style)
+                downloadAICoverPNG(image, {
+                  title: plan.title,
+                  genre: plan.brief?.genre,
+                  players: plan.brief?.players,
+                  difficulty: plan.brief?.difficulty,
+                  lockScore: plan.lockScore,
+                })
+                setAiIdx((i) => (i + 1) % AI_COVER_STYLES.length)
+              })
+            }}>
+              ✨ AI 封面·{AI_COVER_STYLES[aiIdx].label}
+            </button>
+          </div>
+        )}
+      </div>
       {busy && <span className="export-msg">正在导出…</span>}
       {!busy && message && <span className="export-msg">{message}</span>}
     </div>

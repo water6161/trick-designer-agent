@@ -2718,3 +2718,68 @@ button:disabled,
   .imm-count.urgent,
   .imm-tense .imm-choices { animation: none; }
 }
+
+/* ═════════ 顶栏与导出栏收纳下拉 ═════════ */
+.tools-menu { position: relative; }
+.tools-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  background: #12141d;
+  border: 1px solid #3a3323;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 172px;
+  animation: card-slide 0.18s ease both;
+}
+.tools-dropdown button {
+  background: none;
+  border: none;
+  color: #d8cfb4;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tools-dropdown button:hover { background: #1d2130; color: #e8d9ae; }
+
+.export-more { position: relative; display: inline-block; }
+.export-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  background: #12141d;
+  border: 1px solid #3a3323;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 178px;
+  animation: card-slide 0.18s ease both;
+}
+.export-menu button {
+  background: none;
+  border: none;
+  color: #d8cfb4;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.export-menu button:hover { background: #1d2130; color: #e8d9ae; }
+.export-menu .export-menu-ai { color: #c9b47a; }
+
+@media (max-width: 640px) {
+  .tools-dropdown, .export-menu { position: fixed; top: auto; bottom: 76px; left: 12px; right: 12px; min-width: 0; }
+  .tools-dropdown button, .export-menu button { padding: 13px 16px; font-size: 15px; }
+}
