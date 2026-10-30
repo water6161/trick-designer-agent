@@ -53,6 +53,7 @@ export default function App() {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stickRef = useRef(true)
   const historySeq = useRef(0)
+  const lastAssistantLenRef = useRef(0)
 
   const flushTokens = () => {
     const buffered = pendingRef.current
@@ -65,6 +66,7 @@ export default function App() {
       if (last.role !== 'assistant') return prev
       const copy = prev.slice()
       copy[lastIndex] = { ...last, content: last.content + buffered }
+      lastAssistantLenRef.current = copy[lastIndex].content.length
       return copy
     })
   }
@@ -188,7 +190,12 @@ export default function App() {
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        setError(err instanceof Error ? err.message : '网络异常，请稍后重试。')
+        // 正文已基本生成完整时，收尾阶段的断流降级为提示而非报错——内容没丢，导出/沉浸都可用
+        if (lastAssistantLenRef.current > 1500) {
+          setNotice('方案主体已生成完毕，收尾连接中断。导出与沉浸模式已可用；如需线索卡数据，可点「从断点重试」补跑收尾。')
+        } else {
+          setError(err instanceof Error ? err.message : '网络异常，请稍后重试。')
+        }
       }
     } finally {
       if (flushTimerRef.current !== null) {
@@ -477,6 +484,11 @@ export default function App() {
             {notice && (
               <div className="banner banner-notice">
                 <span>{notice}</span>
+                {!streaming && !loading && (
+                  <button className="banner-action" onClick={() => void retryFromCheckpoint()}>
+                    从断点重试
+                  </button>
+                )}
                 <button onClick={() => setNotice('')} aria-label="关闭提示">
                   关闭
                 </button>
