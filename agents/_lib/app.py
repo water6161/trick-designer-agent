@@ -723,7 +723,15 @@ async def handler(context: Any):
         cover_style = str(body.get("cover_style") or "character")
         if cover_style not in ("character", "group", "scene"):
             cover_style = "character"
-        return await _handle_ai_cover(env, store, conversation_id, cover_style)
+        try:
+            cover_env = load_env(context.env)
+        except ConfigError as exc:
+            logger.error(str(exc))
+            return {"error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("init env failed", exc)
+            return {"error": "模型初始化失败，请检查网关配置。"}
+        return await _handle_ai_cover(cover_env, store, conversation_id, cover_style)
     if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
 
