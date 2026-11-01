@@ -1,169 +1,190 @@
 # 诡计设计师 · 剧本杀诡计工作台
 
-基于 **EdgeOne Makers Agents Runtime + LangGraph** 的剧本杀诡计设计 Agent：输入题材、人数、难度与诡计类型，自动联网检索经典套路与玩家雷点，输出完整诡计方案，并附公平性自查、DM 开本提示与防杠要点。
+> 一句话需求 → 一份可直接开本的剧本杀方案，外加一整套开本工具。
 
-## 线上环境
+基于 **EdgeOne Makers Agents Runtime + LangGraph** 构建的剧本杀诡计设计 Agent。输入题材、人数、难度与诡计类型，自动联网检索经典套路与玩家雷点，流式输出完整诡计方案（含公平性自查、DM 提示、防杠要点），并提供沉浸式互动剧情、AI 封面生成与 DM 开本工具链。
 
-| 项 | 值 |
+## 项目亮点
+
+| 能力 | 说明 |
 | --- | --- |
-| Makers 项目 | `trick-designer-agent`（Project ID：`makers-bfvelax99njw`） |
-| 临时域名 | `https://trick-designer-agent-5qq5gzrp.edgeone.cool` |
-| Git 仓库 | `https://github.com/water6161/trick-designer-agent`（已在 Makers 控制台关联，分支 `main`） |
-| 控制台 | `https://console.cloud.tencent.com/edgeone/pages/project/makers-bfvelax99njw` |
-| 访问方式 | 首次访问使用 `edgeone makers deploy` 输出的带 `eo_token` 的 URL；绑定自定义域名后可直接使用正式域名 |
+| **分段流式生成** | 方案拆 3 段独立生成，各段独立超时/重试，任一段失败只丢一段，不再整体卡死 |
+| **智能追问** | 需求有空白时先问 2~3 个带选项的关键问题；说「直接生成」可跳过 |
+| **多方案对比** | 一次给出 A/B/C 三个创意方向，选定后展开完整方案 |
+| **迭代修改** | 基于上一版增量调整（换诡计、加红鲱鱼、调难度），不被旧稿锚定 |
+| **沉浸互动剧情** | 第二人称冒险模式，限时抉择 + 死亡/存疑/安全结局 + 死亡次数评级 + 隐藏真结局 |
+| **AI 封面生成** | 通义万相 wan2.5，电影剧照风的人物海报 / 群像 / 场景三种风格，前端叠加排版 |
+| **开本工具链** | DM 主持台（流程+线索清单+计时器）、证据链时间线、角色速览卡、救场手册 |
+| **多格式导出** | 完整版/玩家版 Word、扑克式线索卡（裁开即用）、Markdown、PNG 封面 |
 
-> `eo_token` 是部署预览的临时访问凭证，不写入仓库。正式对外开放请按「五、部署」后的域名绑定流程操作。
+## 一、技术栈
 
-## 一、项目结构
+| 层 | 技术 |
+| --- | --- |
+| 前端 | React + TypeScript + Vite（手写 CSS，无 UI 框架） |
+| 后端 | Python 3.11 + LangGraph（多节点状态机编排） |
+| 对话模型 | 阿里云 DashScope / 通义千问（qwen-plus、qwen-flash） |
+| 生图模型 | 通义万相 wan2.5-t2i-preview |
+| 检索 | 平台内置 web_search + 高德地图 API（天气/地点） |
+| 存储 | EdgeOne Makers KV/Blob（LangGraph Checkpointer）+ 浏览器 localStorage |
+| 文档生成 | docx（前端按需动态加载，不拖慢首屏） |
+| 图形 | Canvas + SVG（封面合成、程序化封面） |
+| 音效 | Web Audio API 实时合成（零音频文件） |
+
+## 二、运行流程
+
+```
+用户输入
+  └→ understand ──┬─(闲聊/咨询)──────────────→ compose → END
+                  ├─(需要追问)─→ 输出问题 → END（等待回答）
+                  └─(要方案)──→ research → design → extract → compose → END
+                                   ↑                    ↑
+                              联网检索经典套路      结构化提取
+                              （失败自动降级）      线索/角色/时间线
+```
+
+| 节点 | 作用 |
+| --- | --- |
+| `understand` | 意图分类（new / iterate / question）+ 需求字段抽取 + 追问判断 + 对比模式识别 |
+| `research` | 调用平台内置 `web_search` 检索经典诡计、常见套路、玩家雷点；失败自动降级 |
+| `design` | 分 3 段流式生成：案件与诡计 / 凶手与线索 / 时间线与沉浸剧情 |
+| `extract` | 轻量模型把 Markdown 提取为结构化摘要（供线索卡、沉浸模式、导出使用） |
+| `compose` | 收尾成稿，附 DM 提示、防杠要点、可迭代方向 |
+
+多轮记忆由平台 `context.store.langgraph_checkpointer` 以 `thread_id = conversation_id` 持久化，跨实例可恢复；**不依赖任何自建数据库**。
+
+## 三、关键设计决策
+
+### 1. 为什么分段流式生成
+
+早期版本一次生成完整方案，模型思考 + 输出共享 token 预算，长方案经常在第 4~5 分钟被平台超时掐断，用户拿到的是一段半成品。
+
+改造后：
+- 方案拆成 3 段，每段有独立超时（`[115s, 85s]`）与全局截止时间
+- 任一段超时只丢该段，其余部分正常交付，并给出「可补写」提示
+- 已流出的内容保留在页面上，避免用户白等
+
+### 2. 为什么做双解析兜底
+
+结构化摘要由轻量模型（qwen-flash）提取，实测**不稳定**：偶发返回空结果或字段缺失。
+
+因此前端不把结构化数据当作唯一来源：
+- 优先后端 `extract` 的结构化结果
+- 同时用 `src/lib/parsePlan.ts` 从**流式 Markdown 正文**现场解析角色表、线索表、时间线
+- 两者合并，缺哪补哪
+
+这样即使提取失败，沉浸模式和线索卡依然可用。
+
+### 3. 追问与对比的状态机
+
+用两个 state 字段驱动多轮分支：
+- `pending`：已发出追问，等待用户回答
+- `mode`：`compare`（等待选方向）/ `compared`（已选定，进入生成）
+
+配套的意图兜底：明显的寒暄、能力咨询（「你好」「你能做什么」）降级为问答，避免新用户一进来就被抛一堆诡计专业问题。
+
+### 4. SSE 心跳与断流降级
+
+平台函数有执行时长上限，长任务容易在收尾阶段被断开。应对：
+- 后端每 20 秒发一次心跳事件，避免中间层判定空闲
+- 前端识别「正文已完整但收尾中断」的情形，**降级为提示而非报错**，并保留「从断点重试」入口
+
+### 5. 前端性能
+
+- docx 库（约 380KB）拆为独立 chunk，点击导出时才动态加载 → 首屏 JS 从 734KB 降到 351KB
+- 首页鼠标跟随动画用 `requestAnimationFrame` 节流，避免高频 `mousemove` 触发过多渲染
+- 历史方案书架写入 localStorage 时逐份淘汰重试，配额超限不会整批失败
+
+## 四、项目结构
 
 ```
 .
 ├── agents/                      # Makers 会话模式 Runtime（文件/目录即路由）
 │   ├── _lib/                    # 私有包（_ 前缀不生成路由）
-│   │   ├── app.py               # HTTP 入口实现：SSE、会话列表/历史/删除、异常兜底
+│   │   ├── app.py               # HTTP 入口：SSE、会话 CRUD、导出、AI 封面
 │   │   ├── config.py            # 环境变量读取（密钥不落代码）
 │   │   ├── graph.py             # LangGraph 工作流装配
-│   │   ├── nodes.py             # understand / research / design / audit / compose
-│   │   ├── models.py            # ChatOpenAI → Makers 模型网关
-│   │   ├── prompts.py           # 角色、安全边界、成稿结构约束
+│   │   ├── nodes.py             # understand / research / design / extract / compose
+│   │   ├── models.py            # ChatOpenAI → 模型网关
+│   │   ├── prompts.py           # 角色设定、安全边界、成稿结构约束
 │   │   ├── schemas.py           # 结构化输出的 Pydantic Schema
-│   │   ├── search.py            # 平台内置 web_search 检索与结果归一化
-│   │   ├── state.py             # LangGraph State
-│   │   └── logger.py            # stdout/stderr 日志（平台采集）
-│   ├── trick-designer/
-│   │   └── index.py             # POST /trick-designer
-│   ├── stop/
-│   │   └── index.py             # POST /stop（尽力而为地中止当前运行）
-│   └── requirements.txt
-├── src/                         # 暗黑风格对话前端（React + Vite + TS）
-│   ├── components/
-│   ├── lib/api.ts               # SSE 解析、会话列表/历史/删除/停止
-│   ├── lib/markdown.tsx
-│   ├── App.tsx
-│   └── index.css
+│   │   ├── kb.py                # 本地知识库检索
+│   │   ├── search.py            # 联网检索与结果归一化
+│   │   ├── amap.py              # 高德天气/地点（失败静默降级）
+│   │   └── state.py             # LangGraph State
+│   ├── trick-designer/index.py  # POST /trick-designer
+│   └── stop/index.py            # POST /stop
+├── src/
+│   ├── components/              # 聊天、沉浸模式、DM 主持台、时间线、角色卡等
+│   ├── lib/api.ts               # SSE 解析、会话 CRUD
+│   ├── lib/parsePlan.ts         # Markdown → 结构化方案（前端兜底解析）
+│   ├── lib/exporters.ts         # 封面 SVG / Canvas 合成
+│   ├── lib/docxExporters.ts     # Word 导出（按需加载）
+│   ├── lib/shelf.ts             # 本地方案书架
+│   ├── lib/sound.ts             # Web Audio 音效合成
+│   └── App.tsx
 ├── edgeone.json                 # Makers 项目配置
-├── requirements.txt             # 本地调试依赖（与 agents/requirements.txt 一致）
 └── package.json
 ```
 
-## 二、运行流程
-
-```
-understand → research → design → audit → compose
-      │
-      └─(纯咨询类问题)────────────→ compose
-```
-
-| 节点 | 作用 |
-| --- | --- |
-| `understand` | 解析题材/人数/难度/诡计类型/特殊设定，判断是新建、迭代还是咨询 |
-| `research` | 调用平台内置 `web_search` 检索经典诡计、常见套路、玩家雷点；失败自动降级 |
-| `design` | 生成结构化方案：死者、背景、核心诡计、凶手逻辑、人物、公开/深入线索、时间线、红鲱鱼 |
-| `audit` | 独立公平性审查：锁凶充分性评分、是否降智、是否只有上帝视角能破、其他合理解释、bug 与修复建议 |
-| `compose` | 按固定 Markdown 结构流式成稿，附 DM 提示、防杠要点、易卡壳点、可迭代方向 |
-
-多轮记忆由平台 `context.store.langgraph_checkpointer` 以 `thread_id = conversation_id` 持久化，跨实例可恢复；不依赖任何自建数据库。
-
-## 三、环境变量
-
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `AI_GATEWAY_API_KEY` | 是 | 模型网关密钥，由 Makers 自动注入，代码只从 `context.env` 读取 |
-| `AI_GATEWAY_BASE_URL` | 否 | 默认 `https://ai-gateway.edgeone.link/v1` |
-| `AI_GATEWAY_MODEL` | 否 | 默认 `@makers/deepseek-v4-flash`；切换模型只改此变量 |
-| `WSA_API_KEY` | 否 | 联网搜索备用密钥；当前检索使用平台内置 `web_search` |
-
-> 禁止把任何密钥写入代码或提交到仓库。`.env` 仅用于本地调试且已被 `.gitignore` 忽略。
-
-## 四、本地调试
+## 五、本地调试
 
 ```bash
 npm install
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r agents/requirements.txt
 
 npm i -g edgeone
 edgeone makers link      # 同步控制台项目的环境变量
-edgeone makers dev       # 默认 http://localhost:8088
+edgeone makers dev       # http://localhost:8088
 ```
 
-- 前端页面：`http://localhost:8088/`
-- 本地链路追踪面板：`http://localhost:8088/agent-metrics`
-
-前端构建校验：
+校验：
 
 ```bash
-npm run build
+npm run build                       # 前端类型检查 + 构建
+python -m compileall agents         # 后端语法检查
 ```
-
-后端语法与导入校验：
-
-```bash
-python -m compileall agents
-python -c "import sys; sys.path.insert(0, 'agents'); from _lib.graph import build_graph; print(build_graph().get_graph().nodes.keys())"
-```
-
-## 五、部署
-
-### CLI（推荐）
-
-```bash
-edgeone login
-edgeone makers deploy -n <项目名>
-```
-
-### Git
-
-将仓库推送到 GitHub / Gitee / Coding，在控制台导入 Makers 项目，默认 `main` 分支提交会自动部署。
-
-部署后请在控制台确认：
-
-1. 环境变量已注入 `AI_GATEWAY_API_KEY`、`AI_GATEWAY_BASE_URL`、`AI_GATEWAY_MODEL`；
-2. `edgeone.json` 中 `agents.framework = langgraph`；
-3. 前端接口路径 `/trick-designer` 与 `/stop` 均可访问。
 
 ## 六、接口约定
 
-所有 `agents/*` 请求必须携带请求头 `Makers-Conversation-Id`（6–36 字符，允许 `0-9 a-z A-Z - _ .`）。
+所有 `agents/*` 请求必须携带请求头 `Makers-Conversation-Id`（6–36 字符）。
 
 | 路由 | 请求体 | 响应 |
 | --- | --- | --- |
 | `POST /trick-designer` | `{ "action": "chat", "message": "..." }` | SSE：`session / status / notice / meta / token / done / error` |
-| `POST /trick-designer` | `{ "action": "sessions" }` | `{ "sessions": [{ id, title, updatedAt }] }` |
-| `POST /trick-designer` | `{ "action": "history" }` | `{ "messages": [{ role, content, createdAt }] }` |
-| `POST /trick-designer` | `{ "action": "delete", "conversation_id": "..." }` | `{ "ok": true }` |
-| `POST /stop` | `{ "conversationId": "..." }` | `{ status, conversationId, aborted }` |
+| `POST /trick-designer` | `{ "action": "retry" }` | 从 checkpoint 断点续跑 |
+| `POST /trick-designer` | `{ "action": "sessions" }` / `"history"` / `"delete"` | 会话管理 |
+| `POST /trick-designer` | `{ "action": "export" }` | 导出用完整方案 |
+| `POST /trick-designer` | `{ "action": "ai_cover", "cover_style": "character" }` | Base64 封面图（style 可选 `character` / `group` / `scene`） |
+| `POST /stop` | `{ "conversationId": "..." }` | 中止当前运行 |
 
 ## 七、异常与降级
 
-- **联网检索失败/超时**：并发检索单条 25s 超时，失败仅提示，不阻断方案生成。
-- **公平性自查失败**：返回「未经完整审查」提示，方案仍可交付，但不伪造评分。
-- **模型超时 / 限流 / 上下文超限 / 鉴权失败**：统一转为中文友好提示，通过 SSE `error` 事件推给前端。
-- **记忆写入失败**：只记录日志，不打断当前对话。
-- **客户端断开**：监听 `context.request.signal`，中止图执行，避免无效 token 消耗。
-- **会话操作失败**：`sessions / history / delete` 返回 `error` 字段，前端明确提示而不是静默失败。
+- **联网检索失败/超时**：单条 25s 超时，失败仅提示，不阻断生成
+- **结构化提取失败**：前端用 Markdown 解析兜底，功能不中断
+- **某一段设计超时**：保留已生成内容，标注「待补充」，可让模型补写
+- **模型超时/限流/鉴权失败**：统一转为中文友好提示，通过 SSE `error` 推送
+- **收尾断流**：正文完整时降级为提示，保留断点重试入口
+- **客户端断开**：监听 `signal` 中止图执行，避免无效 token 消耗
 
-## 八、安全与公平性边界
+## 八、安全与内容边界
 
-- 只用于虚构剧本杀创作；不生成真实暴力、血腥过度描写，不设计可现实复刻的行凶手法。
-- 诡计仅限虚构娱乐，不引导模仿犯罪，不产出猎奇或恐怖尺度超标内容。
-- 线索必须对所有玩家可得；拒绝「只有上帝视角才能破案」的诡计；禁止通过强行降智制造难度。
-- 交付内容固定附「创作声明」，提醒仅用于虚构剧本娱乐。
+- 只用于虚构剧本杀创作，不生成真实暴力细节，不设计可现实复刻的行凶手法
+- 线索必须对所有玩家可得，拒绝「只有上帝视角才能破案」的诡计
+- 禁止靠降低玩家智商制造难度
+- 交付内容固定附「创作声明」
 
-## 九、已知风险与修复建议
+## 九、已知限制
 
-| 风险 | 影响 | 建议 |
-| --- | --- | --- |
-| 模型网关对函数调用（tool_calls）支持不稳定 | 结构化方案可能重试后仍失败 | 已做一次重试 + JSON 兜底；若持续失败，可在控制台切换 `AI_GATEWAY_MODEL` 到工具调用更稳的模型 |
-| `web_search` 在本地未开通 | 检索降级为内置经验 | 线上确认平台已启用联网搜索；`WSA_API_KEY` 保留为后续直连备选 |
-| 长会话 token 累积 | 接近上下文上限 | 已限制最近对话窗口；前端提示新建会话；建议长剧本按「设计 → 迭代」拆会话 |
-| `context.utils.abort_active_run` 参数形态随平台版本变化 | 停止按钮可能只中断前端流 | 已做异常兜底；客户端断开时 `signal` 仍会中止图执行 |
-| 前端非 SSE 的错误响应 | 可能显示为空回答 | 已识别 `application/json` 响应并转成错误提示 |
-| 平台 checkpointer 会序列化 `configurable` | 放入 EnvConfig / 工具对象会导致 `MemoryStorageError` | 依赖改为闭包注入，`configurable` 仅保留 `thread_id`（已线上验证） |
-| 平台 DeepSeek 推理模型默认开启思考 | 复杂方案思考耗时长，且与正文共享 token 预算，易超时或 JSON 截断 | 已在 `models.py` 对 `@makers/deepseek` 系列关闭思考，并将输出上限放宽到 16000；长任务每 20 秒发送一次心跳 |
-| devDependencies 审计告警 | `npm audit` 在开发依赖中有 moderate/high 提示 | 生产依赖 `npm audit --omit=dev` 为 0；升级 Vite 主版本需单独评估 |
+| 问题 | 现状 |
+| --- | --- |
+| 生图模型对多人小脸不稳定 | 已改用 wan2.5 + 电影剧照构图，人物占比放大 |
+| 长会话 token 累积 | 已限制最近对话窗口，建议长剧本拆会话 |
+| 平台函数执行时长上限 | 标准模式 4~5 分钟接近上限，收尾可能被断开（已有降级处理） |
+| 生成中刷新页面 | 依赖 checkpointer 恢复，正在生成的段落可能需重试 |
+
+> 注：`agents/_lib/knowledge/` 下的诡计方法论语料为作者原创整理，未包含在本公开仓库中；目录为空时检索自动降级，不影响运行。
 
 ## 十、免责声明
 
