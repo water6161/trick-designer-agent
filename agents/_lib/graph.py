@@ -8,7 +8,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from .config import EnvConfig
-from .nodes import after_understand, compose, design, extract, research, understand
+from .nodes import after_understand, compose, design, extract, research, score, understand
 from .state import AgentState
 
 
@@ -27,6 +27,7 @@ def build_graph(
     builder.add_node("research", partial(research, search_tool=search_tool, env=env))
     builder.add_node("design", partial(design, env=env))
     builder.add_node("extract", partial(extract, env=env))
+    builder.add_node("score", partial(score, env=env))
     builder.add_node("compose", partial(compose, env=env))
 
     builder.add_edge(START, "understand")
@@ -37,7 +38,8 @@ def build_graph(
     )
     builder.add_edge("research", "design")
     builder.add_edge("design", "extract")
-    builder.add_edge("extract", "compose")
+    builder.add_edge("extract", "score")
+    builder.add_edge("score", "compose")
     builder.add_edge("compose", END)
 
     return builder.compile(checkpointer=checkpointer)

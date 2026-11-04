@@ -152,6 +152,21 @@ class PlanDigest(BaseModel):
     must_fix: list[str] = Field(default_factory=list, description="必修问题，每条一句话。")
 
 
+class QualityScore(BaseModel):
+    """四维质量评分：对成稿做可量化的可开本性体检。"""
+
+    clue_fairness: int = Field(ge=0, le=10, description="线索公平性：关键线索是否全部可在第二轮前获取，有无凶手独占信息。")
+    lock_closure: int = Field(ge=0, le=10, description="锁凶闭环：是否有 2 条独立公开线索 + 1 条深入线索构成证据链，动机/机会/手法是否全覆盖。")
+    timeline_coherence: int = Field(ge=0, le=10, description="时间线自洽：是否有 3 个以上可交叉验证的时间锚点，角色行动线有无冲突。")
+    red_herring_quality: int = Field(ge=0, le=10, description="红鲱鱼质量：数量 2~4 个，每个都有明确的排除线索，且与主线有关联。")
+    issues: list[str] = Field(default_factory=list, description="扣分原因，每条一句话，指明具体位置。")
+    fix_hints: list[str] = Field(default_factory=list, description="针对最低分项的 1~3 条可执行改进建议。")
+
+    @property
+    def total(self) -> int:
+        return self.clue_fairness + self.lock_closure + self.timeline_coherence + self.red_herring_quality
+
+
 class QuickQuestions(BaseModel):
     """出方案前的关键追问（最多 3 个）。"""
 

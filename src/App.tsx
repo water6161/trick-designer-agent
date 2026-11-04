@@ -12,6 +12,7 @@ import TimelineView from './components/TimelineView'
 import DMView from './components/DMView'
 import RoleCards from './components/RoleCards'
 import RescuePanel from './components/RescuePanel'
+import QualityCard from './components/QualityCard'
 import { MenuIcon } from './components/icons'
 import {
   deleteSession,
@@ -23,7 +24,7 @@ import {
   streamRetry,
 } from './lib/api'
 import { listShelf, removeFromShelf, saveToShelf, planTitle, type ShelfItem } from './lib/shelf'
-import type { ChatMessage as ChatMessageType, SessionItem } from './types'
+import type { ChatMessage as ChatMessageType, MetaPayload, QualityScore, SessionItem } from './types'
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -46,6 +47,7 @@ export default function App() {
   const [showRoles, setShowRoles] = useState(false)
   const [showRescue, setShowRescue] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
+  const [quality, setQuality] = useState<QualityScore | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -180,6 +182,7 @@ export default function App() {
         scheduleFlush()
       },
       onNotice: (msg: string) => setNotice(msg),
+      onMeta: (meta: MetaPayload) => setQuality(meta.quality ?? null),
       onError: (msg: string) => setError(msg),
     }
     try {
@@ -455,13 +458,16 @@ export default function App() {
                 <Welcome onPick={(prompt) => void send(prompt)} />
               )
             ) : (
-              messages.map((message, index) => (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  streaming={streaming && index === messages.length - 1}
-                />
-              ))
+              <>
+                {messages.map((message, index) => (
+                  <ChatMessage
+                    key={message.id}
+                    message={message}
+                    streaming={streaming && index === messages.length - 1}
+                  />
+                ))}
+                {quality && !streaming && <QualityCard score={quality} />}
+              </>
             )}
           </div>
         </div>

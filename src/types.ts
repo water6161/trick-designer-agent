@@ -53,10 +53,22 @@ export interface PlanData {
   [key: string]: unknown
 }
 
+export interface QualityScore {
+  clue_fairness?: number
+  lock_closure?: number
+  timeline_coherence?: number
+  red_herring_quality?: number
+  total?: number
+  ready?: boolean
+  issues?: string[]
+  fix_hints?: string[]
+}
+
 export interface MetaPayload {
   title?: string
   genre?: string
   lock_score?: number | null
+  quality?: QualityScore | null
   source_count?: number
   brief?: PlanBrief
   plan?: PlanData | null

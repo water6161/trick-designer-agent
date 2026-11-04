@@ -2783,3 +2783,30 @@ button:disabled,
   .tools-dropdown, .export-menu { position: fixed; top: auto; bottom: 76px; left: 12px; right: 12px; min-width: 0; }
   .tools-dropdown button, .export-menu button { padding: 13px 16px; font-size: 15px; }
 }
+
+/* ── 质量体检评分卡 ───────────────────────────── */
+.quality-card {
+  margin: 4px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(201, 138, 92, 0.28);
+  border-radius: 12px;
+  background: rgba(28, 24, 22, 0.55);
+}
+.quality-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.quality-title { font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+.quality-total { font-size: 12px; padding: 2px 9px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.quality-total.ok { color: #8fd0a0; background: rgba(80, 170, 110, 0.14); }
+.quality-total.warn { color: #e0ab6a; background: rgba(210, 150, 70, 0.14); }
+.quality-dims { display: flex; flex-direction: column; gap: 7px; }
+.quality-dim { display: grid; grid-template-columns: 86px 1fr 20px; align-items: center; gap: 10px; }
+.quality-dim-label { font-size: 12px; color: #c7bdb4; }
+.quality-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.quality-bar-fill { height: 100%; border-radius: 999px; transition: width 0.45s ease; }
+.quality-bar-fill.good { background: linear-gradient(90deg, #4f9d6b, #7ac894); }
+.quality-bar-fill.mid { background: linear-gradient(90deg, #b98a45, #d8ab63); }
+.quality-bar-fill.bad { background: linear-gradient(90deg, #a8493f, #d0705f); }
+.quality-dim-value { font-size: 12px; text-align: right; color: #d9d0c7; font-variant-numeric: tabular-nums; }
+.quality-list { margin: 8px 0 0; padding-left: 16px; font-size: 12px; color: #b6aca3; line-height: 1.65; }
+.quality-list li { margin-bottom: 3px; }
+.quality-hints { margin-top: 10px; padding-top: 9px; border-top: 1px dashed rgba(255, 255, 255, 0.1); }
+.quality-hints-label { font-size: 12px; color: #c98a5c; font-weight: 600; }

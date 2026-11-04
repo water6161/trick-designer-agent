@@ -280,6 +280,13 @@ function handleEvent(event: string, data: unknown, handlers: StreamHandlers): vo
         genre: typeof payload.genre === 'string' ? payload.genre : undefined,
         lock_score: typeof payload.lock_score === 'number' ? payload.lock_score : null,
         source_count: typeof payload.source_count === 'number' ? payload.source_count : undefined,
+        // 质量体检评分：后端 score 节点产出，缺省为 null（极速模式/评分失败时不上卡片）
+        quality:
+          payload.quality && typeof payload.quality === 'object'
+            ? (payload.quality as MetaPayload['quality'])
+            : null,
+        // 结构化方案：前端工具视图优先用它，缺失时才回退到 parsePlan 兜底解析
+        plan: payload.plan && typeof payload.plan === 'object' ? (payload.plan as MetaPayload['plan']) : null,
       }
       handlers.onMeta?.(meta)
       break

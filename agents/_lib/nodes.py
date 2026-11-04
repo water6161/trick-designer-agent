@@ -18,6 +18,7 @@ from .kb import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
 from .prompts import (
+    AUDIT_SYSTEM,
     COMPOSE_QA_SYSTEM,
     COMPOSE_SYSTEM,
     DESIGN_STREAM_SYSTEM,
@@ -25,7 +26,7 @@ from .prompts import (
     PROBE_SYSTEM,
     UNDERSTAND_SYSTEM,
 )
-from .schemas import BriefPatch, PlanDigest, QuickQuestions
+from .schemas import BriefPatch, PlanDigest, QualityScore, QuickQuestions
 from .search import build_queries, run_searches
 from .state import AgentState
 
@@ -605,6 +606,69 @@ async def extract(
     return {"design": design, "audit": audit}
 
 
+async def score(
+    state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
+) -> dict[str, Any]:
+    """四维质量评分：线索公平性 / 锁凶闭环 / 时间线自洽 / 红鲱鱼质量。
+
+    只打分不改稿，结果写入 state["quality"]，并由 compose 通过 meta 事件送到前端。
+    任何失败都静默降级（评分是增值功能，不能拖垮交付）。
+    """
+    writer = get_stream_writer()
+    markdown = state.get("design_markdown") or ""
+    if not markdown:
+        return {"quality": {}}
+
+    writer({"event": "status", "stage": "score", "label": "正在做质量体检"})
+
+    # 极速模式跳过：省下这一次模型调用换取整体提速
+    if _speed_mode(state):
+        logger.info("score skipped in speed mode")
+        return {"quality": {}}
+
+    model = get_model(env, "answer")
+    messages = [
+        SystemMessage(content=AUDIT_SYSTEM),
+        HumanMessage(content=markdown[:16000]),
+    ]
+    try:
+        result: QualityScore = await _invoke_structured(  # type: ignore[assignment]
+            model, QualityScore, messages, timeouts=[60, 40]
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("quality score failed", exc)
+        writer({"event": "notice", "message": "质量体检未完成，方案正文不受影响。"})
+        return {"quality": {}}
+
+    quality = {
+        "clue_fairness": result.clue_fairness,
+        "lock_closure": result.lock_closure,
+        "timeline_coherence": result.timeline_coherence,
+        "red_herring_quality": result.red_herring_quality,
+        "total": result.total,
+        "ready": result.total >= 32 and min(
+            result.clue_fairness,
+            result.lock_closure,
+            result.timeline_coherence,
+            result.red_herring_quality,
+        ) >= 6,
+        "issues": result.issues,
+        "fix_hints": result.fix_hints,
+    }
+    writer(
+        {
+            "event": "notice",
+            "message": (
+                f"质量体检完成：综合 {result.total}/40"
+                f"（线索公平 {result.clue_fairness}·锁凶闭环 {result.lock_closure}"
+                f"·时间线 {result.timeline_coherence}·红鲱鱼 {result.red_herring_quality}）"
+                + ("，可开本。" if quality["ready"] else "，建议按改进建议修订后再开本。")
+            ),
+        }
+    )
+    return {"quality": quality}
+
+
 def _compose_title(state: AgentState) -> str:
     design = state.get("design") or {}
     brief = state.get("brief") or {}
@@ -631,6 +695,7 @@ async def compose(
     model = get_model(env, "answer")
     design = state.get("design") or {}
     audit_data = state.get("audit") or {}
+    quality = state.get("quality") or {}
     brief = state.get("brief") or {}
     research = state.get("research") or []
     title = _compose_title(state)
@@ -641,6 +706,7 @@ async def compose(
             "title": title,
             "genre": brief.get("genre"),
             "lock_score": audit_data.get("lock_score"),
+            "quality": quality or None,
             "source_count": len(research),
             "brief": {
                 "genre": brief.get("genre"),
