@@ -40,8 +40,6 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     }
   }
 
-  if (!hasPlan) return null
-
   const btn = (label: string, onClick: () => void, key: string) => (
     <button key={key} className="export-btn" onClick={onClick} disabled={busy || disabled}>
       {label}
@@ -76,6 +74,9 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     document.addEventListener('click', onDoc)
     return () => document.removeEventListener('click', onDoc)
   }, [moreOpen])
+
+  // 注意：early return 必须放在所有 hooks 之后，否则 hasPlan 变化时 hooks 数量不一致会导致 React 崩溃（error #310）
+  if (!hasPlan) return null
 
   return (
     <div className="export-bar">
