@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
 import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
+import { printPlan } from '../lib/printPlan'
 import { aiCover, type AICoverStyle } from '../lib/api'
 
 const AI_COVER_STYLES: { key: AICoverStyle; label: string }[] = [
@@ -97,6 +98,18 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
             </button>
             <button onClick={() => { setMoreOpen(false); void run((plan) => downloadMarkdown(plan.markdown, plan.title)) }}>
               下载 .md
+            </button>
+            <button onClick={() => {
+              setMoreOpen(false)
+              void run((plan) => printPlan(plan.markdown, {
+                title: plan.title,
+                lockScore: plan.lockScore,
+                genre: plan.brief?.genre,
+                players: plan.brief?.players,
+                difficulty: plan.brief?.difficulty,
+              }))
+            }}>
+              打印 / 存为 PDF
             </button>
             <button onClick={() => {
               setMoreOpen(false)

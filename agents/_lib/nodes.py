@@ -177,6 +177,42 @@ def _default_brief(brief: dict[str, Any]) -> dict[str, Any]:
 # ───────────────────────── nodes ─────────────────────────
 
 
+def _looks_like_chitchat(user_text: str) -> bool:
+    """整句寒暄/能力咨询：模型抖动时也要能正确识别为闲聊而非「要新方案」。"""
+    return bool(
+        re.fullmatch(
+            r"[\s，。！？~～、,.!?]*(你好|您好|hi|hello|在吗|嗨|哈喽|你是谁|你能做什么|能干什么|怎么用|怎么玩|如何使用|帮助|help)[\s，。！？~～、,.!?]*",
+            user_text.strip(),
+            re.IGNORECASE,
+        )
+    )
+
+
+def _looks_like_question(user_text: str) -> bool:
+    """短问句且不含生成动词 → 是在问，不是在下单。"""
+    text = user_text.strip()
+    # 「怎么做」里的「做」不是下单动词，先把它从生成动词判断中排除
+    probe = re.sub(r"怎么做|如何做|怎样做", "", text)
+    return bool(
+        re.search(r"(怎么|如何|能不能|可以|是否|为什么|什么|哪)", text)
+        and not re.search(r"(帮我|给我|写一|来一|做一|生成|出一)", probe)
+        and len(text) <= 40
+    )
+
+
+def _wants_skip_probe(user_text: str) -> bool:
+    """明确表示「别问了/直接生成/你看着办」时尊重其意愿，跳过追问。"""
+    return bool(
+        re.search(
+            r"(不用|不要|别|无需|不必|免)(再)?(问|追问|确认)"
+            r"|直接(生成|出|写|做|开始)"
+            r"|(自己)?(决定|看着办|拿主意)"
+            r"|随意|随便你|你看着来|你看着办",
+            user_text,
+        )
+    )
+
+
 async def understand(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
@@ -218,18 +254,8 @@ async def understand(
     qa = intent == "question"
 
     # 兜底：明显的寒暄 / 能力咨询 / 纯提问，不该被当成「要一套新方案」
-    _chat_only = bool(
-        re.fullmatch(
-            r"[\s，。！？~～、,.!?]*(你好|您好|hi|hello|在吗|嗨|哈喽|你是谁|你能做什么|能干什么|怎么用|怎么玩|如何使用|帮助|help)[\s，。！？~～、,.!?]*",
-            user_text.strip(),
-            re.IGNORECASE,
-        )
-    )
-    _asks_how = bool(
-        re.search(r"(怎么|如何|能不能|可以|是否|为什么|什么|哪)", user_text)
-        and not re.search(r"(帮我|给我|写一|来一|做一|生成|出一)", user_text)
-        and len(user_text) <= 40
-    )
+    _chat_only = _looks_like_chitchat(user_text)
+    _asks_how = _looks_like_question(user_text)
     if (_chat_only or _asks_how) and intent == "new" and not state.get("design"):
         intent = "question"
         qa = True
@@ -268,15 +294,7 @@ async def understand(
         updates["design_markdown"] = ""
 
     # 用户明确表示「不用追问 / 直接生成」时尊重其意愿，跳过追问环节
-    _skip_probe = bool(
-        re.search(
-            r"(不用|不要|别|无需|不必|免)(再)?(问|追问|确认)"
-            r"|直接(生成|出|写|做|开始)"
-            r"|(自己)?(决定|看着办|拿主意)"
-            r"|随意|随便你|你看着来|你看着办",
-            user_text,
-        )
-    )
+    _skip_probe = _wants_skip_probe(user_text)
 
     # 首次出完整方案且信息有空白时，先追问 2~3 个关键问题（回答后一次到位）
     if (
@@ -366,6 +384,74 @@ DESIGN_PARTS = [
         "label": "正在收尾时间线与自查（3/3）",
     },
 ]
+
+
+# ── 单段重写：把「重写第 N 部分」这类请求，映射到 DESIGN_PARTS 的某一段 ──
+
+# 每段的标题关键章节号：用于在既有 Markdown 中定位该段的起止边界
+_PART_BOUNDS: list[tuple[str, str]] = [
+    ("#", "## 四、"),          # 第 1 段：标题 … 到「四、凶手」之前
+    ("## 四、", "## 六、"),     # 第 2 段：「四、凶手」… 到「六、时间线」之前
+    ("## 六、", ""),           # 第 3 段：「六、时间线」… 到结尾
+]
+
+_REWRITE_HINT = re.compile(
+    r"(?:重写|重生成|重新写|改写|再写|换掉|补写|补上|只改|只重写|只写)"
+    r"|(?:改|换|调整)\s*(?:一下|下)?\s*第?\s*[1-3一二三]\s*(?:部分|段|章|节)"
+    r"|第?\s*([1-3一二三])\s*(?:部分|段|章|节)\s*(?:重写|重生成|重新写|改写|再写|补写|补上|改)"
+)
+_PART_WORD = {"1": 0, "一": 0, "2": 1, "二": 1, "3": 2, "三": 2}
+
+
+def _rewrite_part_index(state: AgentState, previous_markdown: str) -> int | None:
+    """识别用户是否在要求「只重写某一段」，返回 DESIGN_PARTS 下标；否则 None。
+
+    仅在已有完整方案、且用户明确指向某一段时才触发，避免误伤正常的迭代修改。
+    支持「重写第二部分」「只改第三段」「第2部分再写一下」等表述。
+    """
+    if not previous_markdown or len(previous_markdown) < 120:
+        return None
+    text = _last_user_text(state)
+    if not text:
+        return None
+
+    # 先找「第 N 部分/段/章」这种明确指向，再判断是否含重写动词
+    # (?![下些点步]) 排除「改一下」「想一些」这类把「一」当量词的误匹配
+    target = re.search(r"第?\s*([1-3一二三])(?![下些点步])[^，。！？\n]{0,4}?(?:部分|段|章|节)", text)
+    if not target:
+        return None
+    if not re.search(r"重写|重生成|重新写|改写|再写|补写|补上|只改|换掉|改一下|调整", text):
+        return None
+    return _PART_WORD.get(target.group(1))
+
+
+def _splice_part(previous_markdown: str, new_part: str, index: int) -> str:
+    """把重写后的某一段拼回完整方案：替换该段覆盖的区间，其余章节保持不变。"""
+    start_marker, end_marker = _PART_BOUNDS[index]
+    text = previous_markdown
+
+    if index == 0:
+        # 第一段从文档开头（# 标题）起，到下一段标记前
+        start = 0
+        if not text.lstrip().startswith("#"):
+            start = 0
+    else:
+        pos = text.find(start_marker)
+        if pos < 0:
+            # 找不到边界：退化为整体追加，保证不丢用户内容
+            return (text.rstrip() + "\n\n" + new_part.strip()).strip()
+        start = pos
+
+    end = len(text)
+    if end_marker:
+        pos = text.find(end_marker, start + 1)
+        if pos >= 0:
+            end = pos
+
+    head = text[:start].rstrip()
+    tail = text[end:].lstrip()
+    pieces = [p for p in (head, new_part.strip(), tail) if p]
+    return "\n\n".join(pieces).strip()
 
 
 async def _stream_part(
@@ -501,6 +587,24 @@ async def design(
     chunks: list[str] = []
     # 全局预算：给 extract 与成稿留出 ≥80s，避免三段都慢时撞平台 300s 硬上限
     deadline = asyncio.get_running_loop().time() + (195 if not speed else 165)
+
+    # 单段重写：用户说「重写第二部分 / 只改第三章」时，只重跑对应那一段，其余章节原样保留
+    only = _rewrite_part_index(state, previous_markdown)
+    if only is not None:
+        part = DESIGN_PARTS[only]
+        writer({"event": "status", "stage": "design", "label": f"正在重写第 {part['no']} 部分"})
+        text = await _stream_part(
+            model,
+            base_payload,
+            part,
+            writer,
+            timeouts=[130, 95] if not speed else [100, 75],
+            deadline=deadline,
+        )
+        merged = _splice_part(previous_markdown, text, only)
+        writer({"event": "status", "stage": "designed", "label": f"第 {part['no']} 部分已重写"})
+        return {"design_markdown": merged}
+
     for part in DESIGN_PARTS:
         writer({"event": "status", "stage": "design", "label": part["label"]})
         text = await _stream_part(

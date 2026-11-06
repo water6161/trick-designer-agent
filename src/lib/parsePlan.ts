@@ -46,6 +46,13 @@ function rowsToObjects(rows: string[][]): RowLike[] {
 }
 
 function pick(row: RowLike, keys: string[]): string {
+  // 先做「完全相等」的精确匹配，再做「包含」的模糊匹配。
+  // 否则 ['线索'] 会先命中最左边的「线索内容 / 线索名称」列，导致内容错列。
+  for (const key of keys) {
+    for (const name of Object.keys(row)) {
+      if (name === key) return row[name]
+    }
+  }
   for (const key of keys) {
     for (const name of Object.keys(row)) {
       if (name.includes(key)) return row[name]
@@ -86,11 +93,16 @@ export function parsePlanFromMarkdown(md: string): PlanData {
     if (Object.keys(victim).length) plan.victim = victim
   }
 
-  const culpritText = mdSubsection(md, '凶手')
-  if (culpritText) {
-    const nameMatch =
-      culpritText.match(/凶手[：:]\s*([^\n，,（(。]{2,12})/) || md.match(/凶手[：:]\s*([^\n，,（(。]{2,12})/)
-    plan.culprit = { character: nameMatch ? nameMatch[1].trim() : '', motive: culpritText.slice(0, 400) }
+  // 凶手信息：优先在「凶手」小节里找，找不到则退回全文中第一个「凶手：」
+  // （方案的实际章节名是「## 四、凶手与人物逻辑」，是二级标题而非三级，只查 subsection 会漏）
+  const culpritSection = mdSubsection(md, '凶手') || mdSection(md, '四')
+  const culpritText = culpritSection || md
+  const nameMatch = culpritText.match(/凶手[：:]\s*([^\n，,（(。]{2,12})/)
+  if (nameMatch) {
+    plan.culprit = {
+      character: nameMatch[1].trim(),
+      motive: culpritText.slice(0, 400),
+    }
   }
 
   plan.characters = rowsToObjects(mdRows(mdTableAfter(md, '角色表'))).map((row) => ({

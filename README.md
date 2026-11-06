@@ -7,6 +7,7 @@
   <img alt="model" src="https://img.shields.io/badge/LLM-qwen--plus%20%7C%20qwen--flash-6f42c1"/>
   <img alt="t2i" src="https://img.shields.io/badge/T2I-wan2.5%20%7C%20wanx2.1--turbo-e91e63"/>
   <img alt="platform" src="https://img.shields.io/badge/deploy-Tencent%20EdgeOne%20Makers-1a73e8"/>
+  <img alt="ci" src="https://github.com/water6161/trick-designer-agent/actions/workflows/ci.yml/badge.svg"/>
   <img alt="license" src="https://img.shields.io/badge/use-educational%20%2F%20demo-green"/>
 </p>
 
@@ -38,7 +39,7 @@
 - [快速开始](#快速开始)
 - [接口约定](#接口约定)
 - [异常与降级](#异常与降级)
-- [质量自检](#质量自检)
+- [测试与质量自检](#测试与质量自检)
 - [Roadmap](#roadmap)
 - [FAQ](#faq)
 - [安全与内容边界](#安全与内容边界)
@@ -63,6 +64,7 @@
 - **需求构造器 / 灵感骰子** <img src="docs/screenshots/inspiration-dice.png" width="360" align="right"/>：把需求拆成题材 / 人数 / 难度 / 诡计 / 氛围五个维度逐项选择，拼装成一句完整需求；「灵感骰子」一键从各维度候选池随机抽取组合，适合头脑风暴与快速探索
 - **多方案对比**：一次给出 A/B/C 三个创意方向，选定后展开完整方案
 - **迭代修改**：基于上一版增量调整（换诡计、增删角色、修漏洞），不被旧稿锚定；也支持「补写第 N 部分」恢复降级章节
+- **单段重写**：说「重写第二部分」只重跑那一段，其余章节原样保留，不必整篇等 3 分钟
 
 ### 质量保障
 
@@ -90,7 +92,7 @@
 
 - **AI 封面**：人物海报 / 群像 / 场景三种风格；人脸用 wan2.5-t2i-preview（稳定性优先），场景用 wanx2.1-t2i-turbo（速度优先），按用途分流
 - **沉浸互动剧情**：第二人称冒险，限时抉择 + 死亡/存疑/安全结局 + Web Audio 心跳/死亡音效（零音频文件，实时合成）
-- **多格式导出**：完整版/玩家版 Word、扑克式线索卡、Markdown、PNG/AI 封面
+- **多格式导出**：完整版/玩家版 Word、扑克式线索卡、Markdown、PNG/AI 封面，以及**打印 / 另存为 PDF**（A4 排版，一键打印成册）
 - **本地书架**：生成完成的方案自动存入 localStorage 书架，多剧本并行管理
 
 ## 技术栈
@@ -285,17 +287,35 @@ edgeone makers dev       # http://localhost:8088
 - **收尾断流**：正文完整时降级为提示，保留断点重试入口
 - **客户端断开**：监听 `signal` 中止图执行，避免无效 token 消耗
 
-## 质量自检
+## 测试与质量自检
+
+### 自动化测试
 
 ```bash
-# 前端：全量类型检查 + 生产构建
-npx tsc --noEmit && pnpm build
-
-# 后端：语法检查
-python -m compileall agents
+pnpm test                        # 前端单元测试（vitest，19 个用例）
+.venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，50 个用例）
+pnpm typecheck                   # 全量类型检查
+pnpm build                       # 生产构建
 ```
 
-已修复的真实问题（可作为调试案例）：
+CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型检查 + 单元测试 + 构建，后端语法检查 + 单元测试。
+
+覆盖重点放在**容错的纯函数**上——输入输出明确、无外部依赖，一旦坏了用户直接看到错误数据：
+
+| 被测对象 | 用例数 | 为什么值得测 |
+| --- | --- | --- |
+| `parsePlan.ts` 兜底解析 | 12 | 结构化提取失败时，全靠它从 Markdown 抢救数据；表头措辞变化、缺章节、空输入都要稳 |
+| 意图兜底正则（寒暄 / 短问句 / 跳过追问） | 约 30 | 模型抖动时的最后一道防线，误判会让「你好」触发一次 3 分钟的生成 |
+| 单段重写识别与拼接 | 约 20 | 拼接算法错了会直接丢用户的已有章节 |
+| 打印排版 Markdown 渲染 | 7 | 含 HTML 转义断言，防止方案内容注入 |
+
+写测试过程中发现并修复的真实缺陷：
+
+- **凶手信息提取失效**：`mdSubsection(md, '凶手')` 只查三级标题，而实际章节是二级的「## 四、凶手与人物逻辑」，导致工具视图拿不到凶手名。修复为「subsection → 二级章节 → 全文」三级回退
+- **线索名称错列**：`pick(['线索'])` 会先命中最左的「线索内容」列，使 name 取到内容。修复为「先精确相等、再模糊包含」两轮匹配
+- **「改一下凶手」误判为重写第一段**：正则把量词「一下」当成了序号「一」，用负向断言 `(?![下些点步])` 排除
+
+### 已修复的真实问题（调试案例）
 
 - **React error #310 整页白屏**：ExportBar 的条件 early return 位于 useState 与 useEffect 之间，hasPlan 变化时 hooks 数量不一致导致崩溃。通过非压缩构建定位，修复为 early return 移至全部 hooks 之后
 - **mock 流式不结束**：SSE 响应缺 `Connection: close`，HTTP/1.1 keep-alive 导致前端流永真
@@ -303,12 +323,14 @@ python -m compileall agents
 
 ## Roadmap
 
+- [x] 单元测试：parsePlan、意图正则、单段拼接、打印渲染 + CI
+- [x] 单段重写：只重写指定部分，其余章节原样保留（不必整篇重生成）
+- [x] 打印 / PDF 导出：A4 排版 + 浏览器打印，另存为 PDF
 - [ ] 公平性规则引擎：把 rubric 打分升级为可执行的硬校验（线索出处闭环、不在场证明可戳穿性）
 - [ ] 诡计查重：历史方案指纹比对，避免同质化套路
 - [ ] 角色立绘：每个角色单独生成，多图一致性（seed 固定）
 - [ ] 玩家侧视图：同一份数据的权限化渲染（遮罩凶手/真相）
 - [ ] 分享链接：只读 URL 分享 + 批注协作
-- [ ] 单元测试：parsePlan 与意图正则的用例覆盖 + CI
 
 ## FAQ
 
