@@ -79,7 +79,13 @@ export default function RescuePanel({ markdown, onClose }: Props) {
   }, [markdown])
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="救场手册"
+      onClick={onClose}
+    >
       <div className="modal-panel rescue-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>🆘 救场手册 &amp; 配乐</h2>

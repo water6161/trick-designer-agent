@@ -334,7 +334,7 @@ edgeone makers dev       # http://localhost:8088
 
 ```bash
 pnpm test                        # 前端单元测试（vitest，152 个用例）
-pnpm test:e2e                    # 浏览器端到端（Playwright，5 条路径打穿全链路）
+pnpm test:e2e                    # 浏览器端到端（Playwright，6 条路径打穿全链路）
 .venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，185 个用例）
 pnpm typecheck                   # 全量类型检查
 pnpm build                       # 生产构建
@@ -363,7 +363,7 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 | `streamPolicy.ts` 重连策略 | 12 | 「什么时候能自动重连」是产品判断：已吐正文、已收 done、用户主动停止都必须拒绝，否则会把两段内容接在一起 |
 | `draft.ts` 草稿暂存 | 12 | 存储抛错（隐私模式、配额满）必须静默降级——保命功能不能变成新的崩溃点 |
 | `CrashScreen` 崩溃页 | 17 | 断言三条出路都在、默认不吓人地展开堆栈、**分享 token 被隐去** |
-| e2e（Playwright + 真 Chromium） | 5 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路 |
+| e2e（Playwright + 真 Chromium） | 6 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路；Esc 关闭弹层按 dialog 语义定位 |
 | `telemetry.py` 运行指标 | 20 | P95/成功率算错会误导优化方向；验证分位数、阶段聚合、容量淘汰 |
 | trace 集成（handler 全链路） | 9 | 用假模型跑完真实 SSE 序列，验证 trace 真被记录、心跳不算阶段、错误被聚合 |
 
@@ -397,6 +397,7 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - [x] 白屏兜底：顶层 ErrorBoundary + 可复制崩溃报告（URL 里的分享 token 自动隐去）
 - [x] 草稿保护：输入内容本地暂存，误刷新不丢；存储不可用时静默降级
 - [x] 弹层按需加载：九个面板改 `React.lazy`，首屏包再降 42KB（gzip 15KB）
+- [x] 键盘可达：九个面板补 `role="dialog"` + `aria-modal`，Esc 统一关闭，跳转载入与可见焦点环
 
 ## FAQ
 

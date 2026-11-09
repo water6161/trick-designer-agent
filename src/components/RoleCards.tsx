@@ -15,7 +15,13 @@ export default function RoleCards({ markdown, onClose }: Props) {
   const roles: PlanCharacter[] = (plan.characters || []).filter((c) => c.name || c.identity)
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="角色速览卡"
+      onClick={onClose}
+    >
       <div className="modal-panel role-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>🃏 角色速览卡</h2>

@@ -439,6 +439,27 @@ function MainApp() {
     saveDraft(input)
   }, [input])
 
+  // 任意弹层打开时，Esc 统一关闭——键盘用户不必 Tab 到角落去找关闭按钮
+  const anyPanelOpen =
+    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer
+  useEffect(() => {
+    if (!anyPanelOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setImmersive(false)
+      setShelfOpen(false)
+      setShowTimeline(false)
+      setShowDM(false)
+      setShowRoles(false)
+      setShowRescue(false)
+      setShowVersions(false)
+      setShowStats(false)
+      setShowPlayer(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [anyPanelOpen])
+
   // 生成中关页面/刷新等于白等，给浏览器一次确认机会
   useEffect(() => {
     if (!streaming) return

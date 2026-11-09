@@ -113,7 +113,13 @@ export default function DMView({ markdown, onClose }: Props) {
   const doneCount = roundClues.filter((c) => checked[c.id || c.name || '']).length
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="DM 主持台"
+      onClick={onClose}
+    >
       <div className="modal-panel dm-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>🎭 DM 主持台</h2>

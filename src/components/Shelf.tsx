@@ -31,7 +31,13 @@ export default function Shelf({ items, onClose, onDelete }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="案卷书架"
+      onClick={onClose}
+    >
       <div className="modal-panel shelf-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>📚 往期案卷</h2>

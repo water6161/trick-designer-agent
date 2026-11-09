@@ -60,7 +60,13 @@ export default function VersionHistory({ conversationId, onClose, onRestored }: 
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="版本历史"
+      onClick={onClose}
+    >
       <div className="modal-panel version-panel" onClick={(event) => event.stopPropagation()}>
         <header className="modal-head version-head">
           <div>

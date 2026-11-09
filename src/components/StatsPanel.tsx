@@ -48,7 +48,13 @@ export default function StatsPanel({ conversationId, onClose }: Props) {
   const maxStage = data?.stages?.length ? Math.max(...data.stages.map((item) => item.avgMs), 1) : 1
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="运行指标"
+      onClick={onClose}
+    >
       <div className="modal-panel stats-panel" onClick={(event) => event.stopPropagation()}>
         <header className="modal-head">
           <h2>📊 运行指标</h2>

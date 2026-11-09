@@ -294,3 +294,18 @@ test('断流兜底：首次连接失败自动重连，用户不用重写需求',
   // 恢复后不应留下错误横幅——用户不需要知道中间抖过一次
   await expect(page.locator('.banner-error')).toHaveCount(0)
 })
+
+test('键盘可达：弹层是 dialog 语义，Esc 直接关闭', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🎭 DM 主持台' }).click()
+
+  // role/aria-label 生效，屏幕阅读器与 e2e 都能按语义定位
+  const dialog = page.getByRole('dialog', { name: 'DM 主持台' })
+  await expect(dialog).toBeVisible()
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+})

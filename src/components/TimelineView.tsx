@@ -54,7 +54,13 @@ export default function TimelineView({ markdown, onClose }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="证据链时间线"
+      onClick={onClose}
+    >
       <div className="modal-panel timeline-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>🔗 证据链时间线</h2>
