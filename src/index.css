@@ -2487,6 +2487,14 @@ button:disabled,
   .modal-panel { max-height: 92vh; border-radius: 12px; }
   .dm-timer { font-size: 30px; }
   .topbar-actions .immersive-btn { padding: 6px 8px; font-size: 12px; }
+
+  /* 顶栏放不下五个按钮：沉浸模式有底部悬浮 FAB 替代，装饰性 eyebrow 让位给标题 */
+  .topbar-actions > .immersive-btn { display: none; }
+  .eyebrow { display: none; }
+  .topbar-actions { gap: 6px; }
+
+  /* 状态文字保持单行完整可读，宁可让按钮组先收缩 */
+  .status-pill { flex-shrink: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* ── 角色速览卡 ── */
