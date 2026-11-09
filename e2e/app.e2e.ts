@@ -357,3 +357,24 @@ test('版本对比：选历史版本看差异，章节汇总与逐行标色都�
   await dialog.getByRole('button', { name: '← 返回版本列表' }).click()
   await expect(dialog.locator('.version-item')).toHaveCount(2)
 })
+
+test('案卷书架：搜正文命中并给出上下文片段，无命中给空态', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: '📚 案卷' }).click()
+  const panel = page.getByRole('dialog', { name: '案卷书架' })
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.shelf-item')).toHaveCount(1)
+
+  const search = panel.getByRole('searchbox', { name: '搜索案卷' })
+
+  // 正文命中：用户记得的是「乌头碱」，不是标题
+  await search.fill('乌头碱')
+  await expect(panel.locator('.shelf-item')).toHaveCount(1)
+  await expect(panel.locator('.shelf-item-snippet')).toContainText('乌头碱')
+
+  await search.fill('绝对不存在的关键词')
+  await expect(panel.locator('.shelf-item')).toHaveCount(0)
+  await expect(panel.locator('.shelf-empty')).toContainText('没有匹配')
+})

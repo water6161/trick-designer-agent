@@ -55,3 +55,41 @@ export function planTitle(markdown: string, fallback = '未命名方案'): strin
   const m = markdown.match(/^#\s*[《“"]?([^《》\n#]{2,40})[》”"]?/m)
   return m ? m[1].trim() : fallback
 }
+
+export type ShelfSort = 'recent' | 'oldest' | 'title'
+
+/**
+ * 书架筛选与排序。
+ *
+ * 方案攒到十几份之后，靠滚动找是找不回来的——所以搜索同时匹配标题和正文
+ * （用户记得的往往是「那个雪夜的案子」，而不是精确标题）。
+ */
+export function filterShelf(items: ShelfItem[], query: string, sort: ShelfSort = 'recent'): ShelfItem[] {
+  const keyword = query.trim().toLowerCase()
+  const matched = keyword
+    ? items.filter(
+        (item) =>
+          item.title.toLowerCase().includes(keyword) || item.markdown.toLowerCase().includes(keyword),
+      )
+    : items.slice()
+
+  if (sort === 'title') {
+    return matched.sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans-CN'))
+  }
+  if (sort === 'oldest') {
+    return matched.sort((a, b) => a.savedAt - b.savedAt)
+  }
+  return matched.sort((a, b) => b.savedAt - a.savedAt)
+}
+
+/** 正文里第一个命中位置附近的片段，用于告诉用户「为什么这条被搜到」。 */
+export function snippetAround(markdown: string, query: string, radius = 28): string {
+  const keyword = query.trim().toLowerCase()
+  if (!keyword) return ''
+  const index = markdown.toLowerCase().indexOf(keyword)
+  if (index === -1) return ''
+  const start = Math.max(0, index - radius)
+  const end = Math.min(markdown.length, index + keyword.length + radius)
+  const text = markdown.slice(start, end).replace(/\s+/g, ' ').trim()
+  return `${start > 0 ? '…' : ''}${text}${end < markdown.length ? '…' : ''}`
+}
