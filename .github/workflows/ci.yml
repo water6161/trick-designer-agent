@@ -55,3 +55,35 @@ jobs:
 
       - name: 单元测试
         run: python -m pytest tests -q
+
+  e2e:
+    name: 前端 · 浏览器端到端
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      # 后端是平台内的 Agent handler，CI 里起不来，e2e 用 route 拦截回放真实协议
+      - name: 安装浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: 端到端测试
+        run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7

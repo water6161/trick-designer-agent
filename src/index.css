@@ -3154,3 +3154,13 @@ button:disabled,
 }
 .dm-truth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .dm-truth-label { font-size: 11.5px; letter-spacing: 0.1em; color: #b08a8a; }
+
+/* ── 沉浸模式：旁白朗读 ── */
+.imm-top-actions { display: flex; align-items: center; gap: 10px; }
+.imm-narrate {
+  background: none; border: 1px solid rgba(216, 181, 106, 0.22);
+  color: #a99872; font-size: 12px; padding: 4px 12px; border-radius: 8px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.imm-narrate:hover { border-color: rgba(216, 181, 106, 0.6); color: #d8b56a; }
+.imm-narrate.on { border-color: rgba(201, 106, 106, 0.5); color: #d08a8a; }

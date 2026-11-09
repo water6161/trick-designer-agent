@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { exportPlan } from '../lib/api'
 import { parsePlanFromMarkdown } from '../lib/parsePlan'
+import { narrateStage } from '../lib/narration'
+import { useSpeech } from '../hooks/useSpeech'
 import { isMuted, playDeathThud, playHeartbeat, playSafeChime, setMuted, unlockAudio } from '../lib/sound'
 import type { ClueData, PlanData } from '../types'
 
@@ -392,6 +394,7 @@ export default function ImmersiveView({ conversationId, fallbackMarkdown, onClos
   const [plan, setPlan] = useState<PlanData | null>(null)
   const [error, setError] = useState('')
   const [stage, setStage] = useState(0)
+  const speech = useSpeech()
 
   useEffect(() => {
     let cancelled = false
@@ -417,6 +420,12 @@ export default function ImmersiveView({ conversationId, fallbackMarkdown, onClos
       cancelled = true
     }
   }, [conversationId, fallbackMarkdown])
+
+  // 翻页就停：上一页的旁白压在新画面上会很出戏
+  useEffect(() => {
+    speech.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage])
 
   const next = useCallback(() => setStage((s) => Math.min(s + 1, STAGE_TITLES.length - 1)), [])
   const prev = useCallback(() => setStage((s) => Math.max(s - 1, 0)), [])
@@ -446,9 +455,21 @@ export default function ImmersiveView({ conversationId, fallbackMarkdown, onClos
         <span className="imm-stage-label">
           {STAGE_TITLES[stage]} · {stage + 1}/{STAGE_TITLES.length}
         </span>
-        <button className="imm-close" onClick={onClose} aria-label="退出沉浸模式">
-          ✕ 退出
-        </button>
+        <div className="imm-top-actions">
+          {speech.supported && (
+            <button
+              className={`imm-narrate ${speech.speaking ? 'on' : ''}`}
+              onClick={() => (speech.speaking ? speech.stop() : speech.speak(narrateStage(stage, plan)))}
+              aria-label="朗读本页"
+              title="朗读当前分镜"
+            >
+              {speech.speaking ? '⏹ 停止' : '🔊 朗读本页'}
+            </button>
+          )}
+          <button className="imm-close" onClick={onClose} aria-label="退出沉浸模式">
+            ✕ 退出
+          </button>
+        </div>
       </header>
 
       <div className="imm-body">

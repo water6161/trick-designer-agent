@@ -9,3 +9,7 @@ __pycache__/
 .DS_Store
 edgeone.local.json
 *.log
+
+# Playwright
+test-results/
+playwright-report/
