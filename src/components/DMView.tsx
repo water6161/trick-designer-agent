@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parsePlanFromMarkdown } from '../lib/parsePlan'
+import { useSpeech } from '../hooks/useSpeech'
 import type { ClueData } from '../types'
 
 interface Props {
@@ -70,6 +71,7 @@ export default function DMView({ markdown, onClose }: Props) {
   const [left, setLeft] = useState(phases[0].minutes * 60)
   const [running, setRunning] = useState(false)
   const timerRef = useRef<number | null>(null)
+  const speech = useSpeech()
 
   const phase = phases[phaseIdx]
   const roundClues: ClueData[] =
@@ -83,6 +85,12 @@ export default function DMView({ markdown, onClose }: Props) {
     setLeft(phases[phaseIdx].minutes * 60)
     setRunning(false)
   }, [phaseIdx, phases])
+
+  // 切阶段就闭嘴：否则上一阶段的引导词会盖在下一阶段上
+  useEffect(() => {
+    speech.stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseIdx])
 
   useEffect(() => {
     if (!running) return
@@ -143,7 +151,29 @@ export default function DMView({ markdown, onClose }: Props) {
         </div>
 
         <div className="dm-brief">
-          <h3>{phase.label}</h3>
+          <div className="dm-brief-head">
+            <h3>{phase.label}</h3>
+            {speech.supported && (
+              <div className="dm-speak">
+                <button
+                  className={speech.speaking ? 'on' : ''}
+                  onClick={() => (speech.speaking ? speech.stop() : speech.speak(phase.brief))}
+                  title="用系统语音朗读当前阶段的引导词"
+                >
+                  {speech.speaking ? '⏹ 停止' : '🔊 朗读'}
+                </button>
+                <select
+                  value={speech.rate}
+                  onChange={(e) => speech.setRate(Number(e.target.value))}
+                  aria-label="语速"
+                >
+                  <option value={0.85}>慢速</option>
+                  <option value={1}>常速</option>
+                  <option value={1.15}>快速</option>
+                </select>
+              </div>
+            )}
+          </div>
           <p>{phase.brief}</p>
         </div>
 
@@ -176,6 +206,30 @@ export default function DMView({ markdown, onClose }: Props) {
 
         {phase.key === 'reveal' && (plan.culprit?.character || plan.hidden_ending) && (
           <div className="dm-truth">
+            <div className="dm-truth-head">
+              <span className="dm-truth-label">复盘念稿</span>
+              {speech.supported && (
+                <button
+                  className={speech.speaking ? 'on' : ''}
+                  onClick={() => {
+                    if (speech.speaking) {
+                      speech.stop()
+                      return
+                    }
+                    const script = [
+                      plan.culprit?.character ? `凶手是${plan.culprit.character}。` : '',
+                      plan.culprit?.motive ? plan.culprit.motive : '',
+                      plan.hidden_ending?.ending ? `隐藏真结局。${plan.hidden_ending.ending}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join('')
+                    speech.speak(script)
+                  }}
+                >
+                  {speech.speaking ? '⏹ 停止' : '🔊 朗读真相'}
+                </button>
+              )}
+            </div>
             {plan.culprit?.character && <p><strong>凶手：</strong>{plan.culprit.character}</p>}
             {plan.hidden_ending?.ending && <p><strong>隐藏真结局：</strong>{plan.hidden_ending.ending}</p>}
           </div>

@@ -3131,3 +3131,26 @@ button:disabled,
 .share-boot p { margin: 0; font-size: 13.5px; color: #8a8066; }
 .share-boot-title { font-size: 18px !important; color: #e8d9ae !important; }
 .share-boot-hint { max-width: 400px; line-height: 1.75; }
+
+/* ── DM 主持台：语音朗读 ── */
+.dm-brief-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dm-brief-head h3 { margin: 0 0 6px; }
+.dm-speak { display: flex; align-items: center; gap: 6px; }
+.dm-speak button,
+.dm-truth-head button {
+  font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer;
+  color: #c9b273; background: rgba(176, 154, 85, 0.1);
+  border: 1px solid rgba(176, 154, 85, 0.32); transition: all 0.15s; white-space: nowrap;
+}
+.dm-speak button:hover,
+.dm-truth-head button:hover { background: rgba(176, 154, 85, 0.2); color: #e8d9ae; }
+.dm-speak button.on,
+.dm-truth-head button.on {
+  background: rgba(201, 106, 106, 0.18); border-color: rgba(201, 106, 106, 0.45); color: #e0a0a0;
+}
+.dm-speak select {
+  font-size: 11.5px; padding: 3px 4px; border-radius: 6px; cursor: pointer;
+  color: #9a927c; background: #171a26; border: 1px solid #2c2818;
+}
+.dm-truth-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.dm-truth-label { font-size: 11.5px; letter-spacing: 0.1em; color: #b08a8a; }
