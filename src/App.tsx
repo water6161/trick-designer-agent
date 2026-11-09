@@ -439,26 +439,36 @@ function MainApp() {
     saveDraft(input)
   }, [input])
 
-  // 任意弹层打开时，Esc 统一关闭——键盘用户不必 Tab 到角落去找关闭按钮
+  // Esc 的两层语义：有弹层时关弹层（键盘用户不必 Tab 到角落找关闭按钮），
+  // 没弹层但正在生成时 = 停止生成（一次等三分钟，想中途叫停不该只能去点按钮）
   const anyPanelOpen =
     immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer
   useEffect(() => {
-    if (!anyPanelOpen) return
+    if (!anyPanelOpen && !streaming) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
-      setImmersive(false)
-      setShelfOpen(false)
-      setShowTimeline(false)
-      setShowDM(false)
-      setShowRoles(false)
-      setShowRescue(false)
-      setShowVersions(false)
-      setShowStats(false)
-      setShowPlayer(false)
+      if (anyPanelOpen) {
+        setImmersive(false)
+        setShelfOpen(false)
+        setShowTimeline(false)
+        setShowDM(false)
+        setShowRoles(false)
+        setShowRescue(false)
+        setShowVersions(false)
+        setShowStats(false)
+        setShowPlayer(false)
+        return
+      }
+      if (streaming) {
+        abortRef.current?.abort()
+        void stopRun(activeId)
+        setStatus('已停止')
+        setStreaming(false)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [anyPanelOpen])
+  }, [anyPanelOpen, streaming, activeId])
 
   // 生成中关页面/刷新等于白等，给浏览器一次确认机会
   useEffect(() => {

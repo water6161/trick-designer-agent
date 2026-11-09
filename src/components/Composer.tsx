@@ -44,7 +44,9 @@ export default function Composer({ value, onChange, onSend, onStop, streaming, d
           }}
         />
         <div className="composer-actions">
-          <span className="composer-hint">Enter 发送 · Shift + Enter 换行</span>
+          <span className="composer-hint">
+            {streaming ? 'Esc 可停止生成' : 'Enter 发送 · Shift + Enter 换行'}
+          </span>
           {streaming ? (
             <button className="stop-btn" onClick={onStop} aria-label="停止生成">
               <StopIcon />

@@ -406,6 +406,8 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - [x] 弹层按需加载：九个面板改 `React.lazy`，首屏包再降 42KB（gzip 15KB）
 - [x] 键盘可达：九个面板补 `role="dialog"` + `aria-modal`，Esc 统一关闭，跳转载入与可见焦点环
 - [x] 版本对比：只读的 `version_content` 接口 + 行级 diff + 章节级改动汇总（超长文本自动退化）
+- [x] 案卷检索：书架按标题/正文搜索 + 三种排序，命中处给上下文片段
+- [x] 键盘闭环：Esc 有弹层时关弹层、无弹层时停止生成；输入框提示随状态切换
 
 ## FAQ
 
