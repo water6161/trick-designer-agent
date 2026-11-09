@@ -252,3 +252,45 @@ test('损坏的分享链接降级为提示页而不是白屏', async ({ page }) 
   await expect(page.getByText('这个链接打不开了')).toBeVisible()
   await expect(page.getByRole('link', { name: '去创作台' })).toBeVisible()
 })
+
+test('断流兜底：首次连接失败自动重连，用户不用重写需求', async ({ page }) => {
+  let chatAttempts = 0
+
+  await page.route('**/trick-designer', async (route) => {
+    let action = ''
+    try {
+      action = String(JSON.parse(route.request().postData() || '{}').action || '')
+    } catch {
+      action = ''
+    }
+    if (action === 'sessions') return route.fulfill({ json: { sessions: [] } })
+    if (action === 'history') return route.fulfill({ json: { messages: [] } })
+    if (action === 'chat') {
+      chatAttempts += 1
+      // 第一次模拟连接层失败（DNS/连接重置），前端应自动重发而不是弹错误
+      if (chatAttempts === 1) return route.abort('connectionfailed')
+      return route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' },
+        body: chatStream(),
+      })
+    }
+    if (action === 'export') return route.fulfill({ json: { title: PLAN.title, plan: PLAN, markdown: MARKDOWN } })
+    return route.fulfill({ json: {} })
+  })
+
+  await page.goto('/')
+  const input = page.locator('textarea').first()
+  await expect(input).toBeVisible()
+  await input.fill('写一个 6 人本格密室本，进阶难度')
+  await page.getByRole('button', { name: '发送' }).click()
+
+  // 自动重连成功：正文照常出现
+  await expect(page.getByText('雪落无声的第七夜').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  // 确实是靠重连救回来的，而不是第一次就成功
+  expect(chatAttempts).toBeGreaterThanOrEqual(2)
+  // 恢复后不应留下错误横幅——用户不需要知道中间抖过一次
+  await expect(page.locator('.banner-error')).toHaveCount(0)
+})

@@ -11,9 +11,30 @@ import type {
   StreamHandlers,
 } from '../types'
 
+import { createWatchdog, fetchWithTimeout, HttpError } from './net'
+import { failureOf, type StreamFailure, type StreamPhase } from './streamPolicy'
+
 const CLIENT_ID_KEY = 'trick-designer-client-id'
 const AGENT_URL = '/trick-designer'
 const STOP_URL = '/stop'
+
+/** 多久拿不到响应头就判定连接失败（后端有心跳，正常建连远快于此）。 */
+const CONNECT_TIMEOUT_MS = 20_000
+/** 流式传输中多久没有任何数据判定假死。后端 20s 一次心跳，留一倍余量。 */
+const STREAM_IDLE_TIMEOUT_MS = 45_000
+
+/** 带失败归类与阶段信息的错误，供上层决定「原样重发」还是「断点续跑」。 */
+export class StreamFailureError extends Error implements StreamFailure {
+  readonly kind: StreamFailure['kind']
+  readonly phase: StreamPhase
+
+  constructor(failure: StreamFailure) {
+    super(failure.message)
+    this.name = 'StreamFailureError'
+    this.kind = failure.kind
+    this.phase = failure.phase
+  }
+}
 
 function uuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -72,10 +93,10 @@ async function readError(response: Response): Promise<string> {
 }
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
-  if (!response.ok) throw new Error(await readError(response))
+  if (!response.ok) throw new HttpError(response.status, await readError(response))
   const data = (await response.json()) as Record<string, unknown>
   const message = errorFromPayload(data)
-  if (message) throw new Error(message)
+  if (message) throw new HttpError(response.status, message)
   return data
 }
 
@@ -210,22 +231,36 @@ export async function streamRetry(
   handlers: StreamHandlers,
   signal: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(AGENT_URL, {
-    method: 'POST',
-    headers: headers(conversationId),
-    body: JSON.stringify({ action: 'retry' }),
-    signal,
-  })
-  if (!response.ok) throw new Error(await readError(response))
+  let response: Response
+  try {
+    response = await fetchWithTimeout(
+      AGENT_URL,
+      {
+        method: 'POST',
+        headers: headers(conversationId),
+        body: JSON.stringify({ action: 'retry' }),
+        signal,
+      },
+      CONNECT_TIMEOUT_MS,
+    )
+  } catch (err) {
+    throw new StreamFailureError(failureOf(err, 'connect'))
+  }
+  if (!response.ok) {
+    throw new StreamFailureError({ kind: 'client', phase: 'connect', message: await readError(response) })
+  }
   const contentType = response.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
     const data = (await response.json()) as Record<string, unknown>
-    throw new Error(
-      (typeof data.error === 'string' && data.error) || '当前没有可恢复的断点，请直接重新发送需求。',
-    )
+    throw new StreamFailureError({
+      kind: 'client',
+      phase: 'connect',
+      message:
+        (typeof data.error === 'string' && data.error) || '当前没有可恢复的断点，请直接重新发送需求。',
+    })
   }
   // 复用流式解析逻辑
-  await consumeStream(response, handlers)
+  await consumeStream(response, handlers, signal)
 }
 
 export async function streamChat(
@@ -234,32 +269,63 @@ export async function streamChat(
   handlers: StreamHandlers,
   signal: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(AGENT_URL, {
-    method: 'POST',
-    headers: headers(conversationId),
-    body: JSON.stringify({ action: 'chat', message }),
-    signal,
-  })
+  let response: Response
+  try {
+    response = await fetchWithTimeout(
+      AGENT_URL,
+      {
+        method: 'POST',
+        headers: headers(conversationId),
+        body: JSON.stringify({ action: 'chat', message }),
+        signal,
+      },
+      CONNECT_TIMEOUT_MS,
+    )
+  } catch (err) {
+    throw new StreamFailureError(failureOf(err, 'connect'))
+  }
 
   if (!response.ok) {
-    throw new Error(await readError(response))
+    throw new StreamFailureError({
+      kind: response.status >= 500 ? 'server' : 'client',
+      phase: 'connect',
+      message: await readError(response),
+    })
   }
   // 参数校验失败等场景平台可能以 JSON 返回 200，需要显式识别，避免被当成空流
   const contentType = response.headers.get('content-type') || ''
   if (contentType.includes('application/json')) {
-    throw new Error(await readError(response))
+    throw new StreamFailureError({ kind: 'client', phase: 'connect', message: await readError(response) })
   }
-  await consumeStream(response, handlers)
+  await consumeStream(response, handlers, signal)
 }
 
-async function consumeStream(response: Response, handlers: StreamHandlers): Promise<void> {
+async function consumeStream(
+  response: Response,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
   if (!response.body) {
-    throw new Error('当前浏览器不支持流式响应。')
+    throw new StreamFailureError({ kind: 'unknown', phase: 'connect', message: '当前浏览器不支持流式响应。' })
   }
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let sawDone = false
+  let sawError = false
+  let idled = false
+
+  // 假死检测：连接没断但长时间没有任何数据（后端每 20s 一次心跳，45s 静默即为异常）
+  const watchdog = createWatchdog(STREAM_IDLE_TIMEOUT_MS, () => {
+    idled = true
+    void reader.cancel().catch(() => {})
+  })
+
+  const onAbort = () => {
+    void reader.cancel().catch(() => {})
+  }
+  signal?.addEventListener('abort', onAbort, { once: true })
 
   const dispatch = (frame: string) => {
     let event = 'message'
@@ -279,22 +345,50 @@ async function consumeStream(response: Response, handlers: StreamHandlers): Prom
     } catch {
       data = raw
     }
+    if (event === 'done') sawDone = true
+    if (event === 'error') sawError = true
     handleEvent(event, data, handlers)
   }
 
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-    let index = buffer.indexOf('\n\n')
-    while (index !== -1) {
-      const frame = buffer.slice(0, index)
-      buffer = buffer.slice(index + 2)
-      if (frame.trim()) dispatch(frame)
-      index = buffer.indexOf('\n\n')
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      watchdog.touch()
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+      let index = buffer.indexOf('\n\n')
+      while (index !== -1) {
+        const frame = buffer.slice(0, index)
+        buffer = buffer.slice(index + 2)
+        if (frame.trim()) dispatch(frame)
+        index = buffer.indexOf('\n\n')
+      }
     }
+    if (buffer.trim()) dispatch(buffer)
+  } finally {
+    watchdog.clear()
+    signal?.removeEventListener('abort', onAbort)
   }
-  if (buffer.trim()) dispatch(buffer)
+
+  if (signal?.aborted) throw new DOMException('已取消', 'AbortError')
+
+  if (idled) {
+    throw new StreamFailureError({
+      kind: 'timeout',
+      phase: 'stream',
+      message: `服务端 ${Math.round(STREAM_IDLE_TIMEOUT_MS / 1000)} 秒没有响应，连接被认为已假死`,
+    })
+  }
+
+  // 后端只在正常跑完时发 done；errored 会走 error 事件并直接结束。
+  // 既没 done 也没 error 就结束 = 传输层断流（中间层掐断、网络切换、函数超时）。
+  if (!sawDone && !sawError) {
+    throw new StreamFailureError({
+      kind: 'network',
+      phase: 'stream',
+      message: '连接在生成完成前中断了',
+    })
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
