@@ -336,7 +336,7 @@ edgeone makers dev       # http://localhost:8088
 
 ```bash
 pnpm test                        # 前端单元测试（vitest，187 个用例）
-pnpm test:e2e                    # 浏览器端到端（Playwright，8 条路径打穿全链路）
+pnpm test:e2e                    # 浏览器端到端（Playwright，9 条路径打穿全链路）
 .venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，190 个用例）
 pnpm typecheck                   # 全量类型检查
 pnpm build                       # 生产构建
@@ -367,7 +367,7 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 | `diff.ts` 版本对比 | 19 | 行级 LCS 的还原性（去掉新增行必须等于旧版）、章节归属、删除整章的归属、折叠上下文的边界；另测超长文本退化路径不会卡死 |
 | `draft.ts` 草稿暂存 | 12 | 存储抛错（隐私模式、配额满）必须静默降级——保命功能不能变成新的崩溃点 |
 | `CrashScreen` 崩溃页 | 17 | 断言三条出路都在、默认不吓人地展开堆栈、**分享 token 被隐去** |
-| e2e（Playwright + 真 Chromium） | 8 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路；Esc 关闭弹层按 dialog 语义定位；版本对比走完「打开列表 → 看差异 → 返回」；书架搜索命中正文并给出片段 |
+| e2e（Playwright + 真 Chromium） | 9 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路；Esc 关闭弹层按 dialog 语义定位；版本对比走完「打开列表 → 看差异 → 返回」；书架搜索命中正文并给出片段；用 `emulateMedia('print')` 断言打印版式确实变白底且不截断 |
 | `telemetry.py` 运行指标 | 20 | P95/成功率算错会误导优化方向；验证分位数、阶段聚合、容量淘汰 |
 | trace 集成（handler 全链路） | 9 | 用假模型跑完真实 SSE 序列，验证 trace 真被记录、心跳不算阶段、错误被聚合 |
 
@@ -407,6 +407,7 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - [x] 键盘可达：九个面板补 `role="dialog"` + `aria-modal`，Esc 统一关闭，跳转载入与可见焦点环
 - [x] 版本对比：只读的 `version_content` 接口 + 行级 diff + 章节级改动汇总（超长文本自动退化）
 - [x] 案卷检索：书架按标题/正文搜索 + 三种排序，命中处给上下文片段
+- [x] 玩家本打印：白底黑字分页版式（展开滚动容器、隐藏操作栏），线下开本直接打给玩家
 - [x] 键盘闭环：Esc 有弹层时关弹层、无弹层时停止生成；输入框提示随状态切换
 
 ## FAQ

@@ -378,3 +378,29 @@ test('案卷书架：搜正文命中并给出上下文片段，无命中给空�
   await expect(panel.locator('.shelf-item')).toHaveCount(0)
   await expect(panel.locator('.shelf-empty')).toContainText('没有匹配')
 })
+
+test('玩家本打印版式：打印媒体下变白底黑字，操作按钮隐藏、内容保留', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '📖 玩家本（无剧透）' }).click()
+  const panel = page.locator('.pv-sheet')
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.pv-print')).toBeVisible()
+
+  await page.emulateMedia({ media: 'print' })
+  const style = await panel.evaluate((el) => {
+    const computed = getComputedStyle(el)
+    return { bg: computed.backgroundColor, maxHeight: computed.maxHeight }
+  })
+  expect(style.bg).toBe('rgb(255, 255, 255)')
+  // 滚动容器在打印时必须展开，否则只印出第一屏
+  expect(style.maxHeight === 'none' || style.maxHeight === '').toBe(true)
+
+  await expect(panel.locator('.pv-print')).toBeHidden()
+  await expect(panel).toContainText('调快的怀表')
+
+  await page.emulateMedia({ media: 'screen' })
+  await expect(panel.locator('.pv-print')).toBeVisible()
+})

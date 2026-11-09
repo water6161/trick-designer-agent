@@ -3413,3 +3413,55 @@ button:disabled,
   font-size: 11.5px; color: #7f8798; line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* ── 玩家本：线下开本用的打印版式 ── */
+.pv-print {
+  flex-shrink: 0; font-size: 12px; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+  color: #c4b795; background: transparent; border: 1px solid #3a3427;
+}
+.pv-print:hover { border-color: #c98a5c; color: #e8d9ae; }
+
+@media print {
+  /* 打印玩家本时：去掉深色底与滚动容器，改成白纸黑字的分页文档 */
+  .pv-sheet,
+  .pv-sheet.pv-sheet-full {
+    position: static !important;
+    max-height: none !important;
+    width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+    padding: 0 !important;
+  }
+  .pv-sheet .pv-scroll {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .pv-sheet .modal-head-actions,
+  .pv-sheet .pv-roles,
+  .pv-sheet .pv-note {
+    display: none !important;
+  }
+  .pv-sheet h2,
+  .pv-sheet h3 {
+    color: #000 !important;
+  }
+  /* 只压文字与描边：背景留给 .pv-sheet 的白底，否则子元素会被刷成透明再盖回白纸上 */
+  .pv-sheet,
+  .pv-sheet * {
+    color: #1a1a1a !important;
+    border-color: #ccc !important;
+  }
+  .pv-sheet :not(.pv-sheet) {
+    background: transparent !important;
+  }
+  .pv-sheet section,
+  .pv-sheet .pv-clue,
+  .pv-sheet li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

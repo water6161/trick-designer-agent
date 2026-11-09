@@ -72,6 +72,15 @@ export default function PlayerView({ plan, packet: fixed, onClose }: Props) {
             {packet.tagline && <p className="pv-tagline">{packet.tagline}</p>}
           </div>
           <div className="modal-head-actions">
+            {!fixed && (
+              <button
+                className="pv-print"
+                onClick={() => window.print()}
+                title="按角色本排版打印，线下开本可直接发给玩家"
+              >
+                🖨 打印
+              </button>
+            )}
             {fixed && (
               <a className="pv-home" href="./" title="用 AI 写一份自己的剧本">
                 我也要写一个
