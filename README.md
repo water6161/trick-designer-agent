@@ -378,6 +378,8 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - **React error #310 整页白屏**：ExportBar 的条件 early return 位于 useState 与 useEffect 之间，hasPlan 变化时 hooks 数量不一致导致崩溃。通过非压缩构建定位，修复为 early return 移至全部 hooks 之后
 - **mock 流式不结束**：SSE 响应缺 `Connection: close`，HTTP/1.1 keep-alive 导致前端流永真
 - **时间线弹窗解析失败**：方案缺「六、时间线」表格章节，前端解析返回空——正是双解析兜底要处理的场景
+- **懒加载漏了 Suspense 边界**：九个弹层改 `React.lazy` 后，`{showDM && <DMView/>}` 的写法在主界面正常（外层有边界），但分享页 `return <PlayerView/>` 是独立的渲染根，缺边界会让整页报错。补上后才安全——这类"只在某一条渲染路径上才暴露"的问题，单测和类型检查都发现不了，只能靠通读所有渲染出口
+- **自动重连不能用「重试」一刀切**：最初想统一 `action: retry` 续跑，但连接阶段失败时后端根本没收到请求，没有断点可续，只会拿到"当前没有可恢复的断点"。改成按失败阶段分流：连接失败原样重发、流中断才续跑
 
 ## Roadmap
 

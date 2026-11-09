@@ -564,7 +564,8 @@ function MainApp() {
           <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
             📚 案卷
           </button>
-          <div className={`status-pill ${streaming ? 'live' : ''}`}>
+          {/* 阶段变化播报给屏幕阅读器：看不到进度条的人也需要知道"现在到哪一步了" */}
+          <div className={`status-pill ${streaming ? 'live' : ''}`} role="status" aria-live="polite">
             <span className="dot" />
             {streaming ? status || '生成中' : loading ? '连接中' : '待命中'}
           </div>
