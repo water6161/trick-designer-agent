@@ -14,6 +14,8 @@ import RoleCards from './components/RoleCards'
 import RescuePanel from './components/RescuePanel'
 import VersionHistory from './components/VersionHistory'
 import QualityCard from './components/QualityCard'
+import RulesCard from './components/RulesCard'
+import StatsPanel from './components/StatsPanel'
 import { MenuIcon } from './components/icons'
 import {
   deleteSession,
@@ -25,7 +27,19 @@ import {
   streamRetry,
 } from './lib/api'
 import { listShelf, removeFromShelf, saveToShelf, planTitle, type ShelfItem } from './lib/shelf'
-import type { ChatMessage as ChatMessageType, MetaPayload, QualityScore, SessionItem } from './types'
+import type {
+  ChatMessage as ChatMessageType,
+  DonePayload,
+  MetaPayload,
+  PlanRules,
+  QualityScore,
+  SessionItem,
+} from './types'
+
+function fmtMs(value?: number): string {
+  if (!value) return '—'
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`
+}
 
 export default function App() {
   const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -50,6 +64,9 @@ export default function App() {
   const [showVersions, setShowVersions] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [quality, setQuality] = useState<QualityScore | null>(null)
+  const [rules, setRules] = useState<PlanRules | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const [lastRun, setLastRun] = useState<DonePayload | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -99,6 +116,8 @@ export default function App() {
       const history = await getHistory(id)
       if (seq !== historySeq.current) return
       setMessages(history)
+      setQuality(null)
+      setRules(null)
       stickRef.current = true
     } catch (err) {
       if (seq !== historySeq.current) return
@@ -184,7 +203,11 @@ export default function App() {
         scheduleFlush()
       },
       onNotice: (msg: string) => setNotice(msg),
-      onMeta: (meta: MetaPayload) => setQuality(meta.quality ?? null),
+      onMeta: (meta: MetaPayload) => {
+        setQuality(meta.quality ?? null)
+        setRules(meta.rules ?? null)
+      },
+      onDone: (data: DonePayload) => setLastRun(data),
       onError: (msg: string) => setError(msg),
     }
     try {
@@ -275,6 +298,9 @@ export default function App() {
     historySeq.current += 1
     setActiveId(newConversationId())
     setMessages([])
+    setQuality(null)
+    setRules(null)
+    setLastRun(null)
     setInput('')
     setError('')
     setNotice('')
@@ -385,6 +411,13 @@ export default function App() {
               </div>
             </>
           )}
+          <button
+            className="immersive-btn stats-btn"
+            onClick={() => setShowStats(true)}
+            title="运行指标：耗时分布与失败原因"
+          >
+            📊
+          </button>
           <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
             📚 案卷
           </button>
@@ -431,6 +464,10 @@ export default function App() {
 
       {showRoles && hasPlan && (
         <RoleCards markdown={latestMarkdown} onClose={() => setShowRoles(false)} />
+      )}
+
+      {showStats && (
+        <StatsPanel conversationId={activeId} onClose={() => setShowStats(false)} />
       )}
 
       {shelfOpen && (
@@ -492,6 +529,19 @@ export default function App() {
                   />
                 ))}
                 {quality && !streaming && <QualityCard score={quality} />}
+                {rules && !streaming && (
+                  <RulesCard
+                    rules={rules}
+                    onFix={() => void send('按硬规则校验发现的逻辑缺口补齐线索，只重写第二部分，其余章节保持不变')}
+                  />
+                )}
+                {lastRun && !streaming && (lastRun.durationMs || lastRun.traceId) && (
+                  <div className="run-meta">
+                    <span>本次生成 {fmtMs(lastRun.durationMs)}</span>
+                    {lastRun.firstTokenMs ? <span>首字 {fmtMs(lastRun.firstTokenMs)}</span> : null}
+                    {lastRun.traceId && <span className="run-meta-trace">trace {lastRun.traceId}</span>}
+                  </div>
+                )}
               </>
             )}
           </div>

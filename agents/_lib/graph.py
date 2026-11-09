@@ -1,4 +1,4 @@
-"""诡计设计工作流：需求解析 → 检索 → 流式设计 → 结构化提取 → 成稿。"""
+"""诡计设计工作流：需求解析 → 检索 → 流式设计 → 结构化提取 → 硬规则校验 → 质量评分 → 成稿。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from .config import EnvConfig
-from .nodes import after_understand, compose, design, extract, research, score, understand
+from .nodes import after_understand, compose, design, extract, research, score, understand, verify
 from .state import AgentState
 
 
@@ -27,6 +27,7 @@ def build_graph(
     builder.add_node("research", partial(research, search_tool=search_tool, env=env))
     builder.add_node("design", partial(design, env=env))
     builder.add_node("extract", partial(extract, env=env))
+    builder.add_node("verify", partial(verify, env=env))
     builder.add_node("score", partial(score, env=env))
     builder.add_node("compose", partial(compose, env=env))
 
@@ -38,7 +39,8 @@ def build_graph(
     )
     builder.add_edge("research", "design")
     builder.add_edge("design", "extract")
-    builder.add_edge("extract", "score")
+    builder.add_edge("extract", "verify")
+    builder.add_edge("verify", "score")
     builder.add_edge("score", "compose")
     builder.add_edge("compose", END)
 

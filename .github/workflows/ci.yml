@@ -54,4 +54,4 @@ jobs:
         run: python -m compileall agents
 
       - name: 单元测试
-        run: python -m pytest tests/test_intent_fallback.py -q
+        run: python -m pytest tests -q

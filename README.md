@@ -11,7 +11,7 @@
   <img alt="license" src="https://img.shields.io/badge/use-educational%20%2F%20demo-green"/>
 </p>
 
-**一个面向长文本生成场景的 AI Agent 实战项目**：LangGraph 六节点编排、分段流式生成容错、双解析兜底、本地知识库检索、四维质量评分、多模态生图、SSE 心跳与断点续跑。业务载体是剧本杀诡计方案设计，同样的架构可直接迁移到报告生成、课程设计、营销文案等任何长文档生成领域。
+**一个面向长文本生成场景的 AI Agent 实战项目**：LangGraph 七节点编排、分段流式生成容错、双解析兜底、本地知识库检索、确定性公平性硬规则引擎（成立条件×线索覆盖矩阵）、四维质量评分、全链路运行指标、多模态生图、SSE 心跳与断点续跑。业务载体是剧本杀诡计方案设计，同样的架构可直接迁移到报告生成、课程设计、营销文案等任何长文档生成领域。
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="420" alt="首页档案卷宗风格交互"/>
@@ -23,6 +23,7 @@
 </p>
 <p align="center">
   <img src="docs/screenshots/quality-score.png" width="560" alt="四维质量体检评分卡：线索公平性/锁凶闭环/时间线自洽/红鲱鱼质量"/>
+  <img src="docs/screenshots/rules-check.png" width="560" alt="硬规则校验卡：15 条确定性规则 + 诡计成立条件矩阵 + 难度时长预估"/>
 </p>
 
 > 一句话需求 → 一份结构完整、可直接使用的长文档方案，外加一整套配套工具链。
@@ -57,6 +58,8 @@
 | 连续迭代后想回到之前的稿子，只能凭记忆重写 | **版本历史**：`aget_state_history` 列出快照，`aupdate_state(as_node=compose)` 写回旧稿，状态指向旧版且不触发节点重跑 | 改坏了一键回退，回退后继续迭代以旧稿为底 |
 | 公开部署后连点会烧模型额度 | **用户级滑动窗口限流**，限额内放行、超限返回友好提示；限流自身异常强制放行 | 成本可控，且限流故障不会挡住正常用户 |
 | 生成内容同质化、套路重复 | **诡计查重 + 双路检索**：从会话 metadata 提取历史诡计指纹（trick_types + core_trick），生成前注入避开指令；关键词加权语料 + 联网检索双路供给 | 同一用户连续生成不会撞车；指纹零额外存储，list_conversations 顺路取回 |
+| 模型自评的分数会漂移，且无法解释「为什么扣这一分」 | **公平性硬规则引擎**：15 条确定性规则加权 0-100（凶手在角色表内、证据链 ≥3 环、线索有获取方式、死亡时间对得上时间线…），另产出诡计成立条件 × 线索覆盖矩阵 | 判定可复现、可单测；缺哪条线索一目了然，且能一键把缺口回填进下一轮重写（检出 → 修复闭环） |
+| 出问题只能翻平台日志，答不上「线上怎么排查、一次多少钱」 | **全链路 trace + 运行指标**：每次请求记录 trace_id / 首字延迟 / 各阶段耗时 / 输出估算 token，进程内保留最近 200 条并聚合出 P50/P95/成功率/规则失败排行 | 前端 📊 面板直接看瓶颈在哪一步、失败长什么样 |
 
 ## 功能一览
 
@@ -71,6 +74,9 @@
 ### 质量保障
 
 - **质量体检评分卡**：方案生成后自动按四维 rubric 打分（每维 0-10 分），给出具体到「加一条什么线索」的改进建议；综合 ≥32 且单项 ≥6 判定「可开本」
+- **硬规则校验卡**：与模型自评并列的**确定性**校验——15 条规则加权得分 + 逐条原因（如「凶手不在角色表内，玩家选不到他」），全部通过时才给「可开本」
+- **诡计成立条件矩阵**：把核心诡计拆成「进出方式 / 上锁时机 / 痕迹处理…」等成立条件，逐条核对手法是否只写在 DM 手册里而没有玩家可见线索承载（**DM 独占信息 = 不公平**）；缺口可一键回填重写
+- **难度与时长预估**：按嫌疑人数 / 线索量 / 手法层数 / 类型负担推算难度档位与开本时长区间，分数构成完全透明
 - **公平性自查**：线索对所有玩家可得，拒绝「只有上帝视角才能破案」的诡计；锁凶证据链要求 2 条独立公开线索 + 1 条深入线索
 - **知识库注入**：9 篇原创诡计方法论（密室破法 / 不在场证明构造 / 叙诡公平边界 / 红鲱鱼设计 / 玩家雷点 20 条等）按需求关键词加权检索注入生成上下文
 
@@ -104,7 +110,7 @@
 | 层 | 技术 |
 | --- | --- |
 | 前端 | React 18 + TypeScript + Vite（手写 CSS，无 UI 框架） |
-| 后端 | Python 3.11 + LangGraph（六节点状态机编排）+ LangChain（模型调用 / bind_tools 结构化输出） |
+| 后端 | Python 3.11 + LangGraph（七节点状态机编排）+ LangChain（模型调用 / bind_tools 结构化输出） |
 | 对话模型 | 阿里云 DashScope / 通义千问（qwen-plus 主力、qwen-flash 轻量） |
 | 生图模型 | 通义万相 **wan2.5-t2i-preview**（人物/群像，人脸稳定）与 **wanx2.1-t2i-turbo**（场景，速度优先），按用途分流；异步任务 + 轮询取图 |
 | 检索 | 平台内置 web_search + 本地知识库（kb.py 关键词加权） + 高德地图 API（真实天气注入环境细节） |
@@ -122,7 +128,8 @@ flowchart LR
   UD -- 要方案 --> R[research 知识库 + 联网检索 失败自动降级]
   R --> D[design 分3段流式生成 各段独立超时重试]
   D --> X[extract 结构化提取 失败由前端Markdown解析兜底]
-  X --> S[score 四维质量体检 极速模式跳过]
+  X --> V[verify 硬规则校验+成立条件矩阵 纯计算无模型]
+  V --> S[score 四维质量体检 极速模式跳过]
   S --> C2[compose 收尾 DM提示/防杠要点] --> E
 ```
 
@@ -132,6 +139,7 @@ flowchart LR
 | `research` | 本地知识库关键词加权检索（tags 精确匹配 + 别名归一化，如「暴风雪山庄」→「封闭场景」）+ 联网检索 | 单条 25s 超时，失败仅提示不阻断 |
 | `design` | 3 段独立流式生成（核心诡计 / 凶手线索 / 时间线沉浸剧情），三段共享同一份大纲与系统提示词 | 单段超时独立重试（重试自动加「务必精简」），仍失败则占位降级，绝不让整单作废 |
 | `extract` | bind_tools 强制 function call，Pydantic 严格校验，从方案提取结构化 JSON | 超时重试 + JSON 解析兜底；失败时前端 parsePlan 从 Markdown 抢救 |
+| `verify` | **纯计算节点**：15 条公平性硬规则（fairness.py）+ 诡计成立条件×线索覆盖矩阵（trick_graph.py）+ 难度时长预估（difficulty.py），结果经 meta.rules 送达前端 | 零模型调用、可单测；结构化缺失时从 Markdown 兜底解析（mdplan.py）；任何异常静默跳过 |
 | `score` | 四维 rubric 打分（线索公平性 / 锁凶闭环 / 时间线自洽 / 红鲱鱼质量），结果经 meta 事件送达前端评分卡 | 极速模式跳过；评分失败静默降级，不影响交付 |
 | `compose` | 收尾：标题确定、meta 汇总、咨询问答（qa 模式） | 正文已在 design 实时流式展示，此处只做收尾 |
 
@@ -179,8 +187,8 @@ flowchart LR
 | `status` | stage + label | 点亮阶段进度条 |
 | `token` | delta | 聊天气泡打字机追加 |
 | `notice` | message | 黄色提示条（降级说明 / 评分结果） |
-| `meta` | title / genre / lock_score / quality / plan | 存结构化数据，供评分卡与工具视图 |
-| `done` | — | 解锁输入框 |
+| `meta` | title / genre / lock_score / quality / plan / **rules** | 存结构化数据，供评分卡、硬规则卡与工具视图 |
+| `done` | traceId / durationMs / firstTokenMs / stages | 解锁输入框；展示「本次耗时 / 首字延迟」 |
 | `error` | message | 显示错误 + 允许 retry |
 
 实现细节：因聊天需要 POST 与自定义头，未用 EventSource，而是 fetch + ReadableStream 手写解析——按 `\n\n` 分帧、`\r\n` 归一、残帧缓存拼接、心跳帧丢弃。
@@ -222,19 +230,24 @@ AI：（iterate 意图）基于上一版增量重写，其余章节保持不变
 │   ├── _lib/
 │   │   ├── app.py               # HTTP 入口：action 路由、SSE、会话 CRUD、导出、AI 封面
 │   │   ├── graph.py             # LangGraph 工作流装配（条件边 + checkpointer 注入）
-│   │   ├── nodes.py             # understand / research / design / extract / score / compose
+│   │   ├── nodes.py             # understand / research / design / extract / verify / score / compose
 │   │   ├── schemas.py           # 结构化输出的 Pydantic Schema（BriefPatch / PlanDigest / QualityScore）
 │   │   ├── prompts.py           # 各节点 SystemMessage + 11 条硬性质量标准
 │   │   ├── kb.py                # 本地知识库检索（关键词加权 + 别名归一化）
 │   │   ├── knowledge/           # 24 篇诡计方法论语料（通用方法论 11 + 分题材/专精 13）
 │   │   ├── dedup.py             # 诡计查重：历史指纹收集 + 避开指令生成（纯函数）
+│   │   ├── fairness.py          # 公平性硬规则引擎：15 条确定性规则加权打分（纯函数）
+│   │   ├── trick_graph.py       # 诡计成立条件 × 线索覆盖矩阵（纯函数）
+│   │   ├── difficulty.py        # 难度档位与时长预估（纯函数）
+│   │   ├── mdplan.py            # Markdown → 结构化方案（extract 失败时的兜底数据源）
+│   │   ├── telemetry.py         # 运行指标：trace 记录 / P50-P95 聚合 / 规则失败排行（进程内）
 │   │   ├── search.py / amap.py  # 联网检索与天气（失败静默降级）
 │   │   └── state.py / config.py / models.py / logger.py
 │   ├── trick-designer/index.py  # POST /trick-designer
 │   └── stop/index.py            # POST /stop
 ├── src/
-│   ├── components/              # 15 个组件：聊天、沉浸模式、DM 主持台、时间线、
-│   │                            #   角色卡、救场手册、质量评分卡、需求构造器、导出栏等
+│   ├── components/              # 17 个组件：聊天、沉浸模式、DM 主持台、时间线、
+│   │                            #   角色卡、救场手册、质量评分卡、硬规则校验卡、运行指标、需求构造器、导出栏等
 │   ├── lib/api.ts               # SSE 解析（consumeStream/handleEvent）、会话 CRUD
 │   ├── lib/parsePlan.ts         # Markdown → 结构化方案（前端兜底解析）
 │   ├── lib/docxExporters.ts     # Word 导出（按需动态加载，首屏不加载 docx 库）
@@ -279,6 +292,7 @@ edgeone makers dev       # http://localhost:8088
 | `POST /trick-designer` | `{ "action": "sessions" }` / `"history"` / `"delete"` | 会话管理 |
 | `POST /trick-designer` | `{ "action": "export" }` | 导出用完整方案（markdown + brief + plan + lock_score） |
 | `POST /trick-designer` | `{ "action": "ai_cover", "cover_style": "character" }` | Base64 封面图（`character` / `group` / `scene`） |
+| `POST /trick-designer` | `{ "action": "stats" }` | 运行指标聚合（P50/P95/成功率/阶段耗时/规则失败排行，只含哈希与耗时，不含用户原文） |
 | `POST /stop` | `{ "conversationId": "..." }` | 中止当前运行 |
 
 ## 异常与降级
@@ -287,6 +301,7 @@ edgeone makers dev       # http://localhost:8088
 - **知识库为空/未命中**：`retrieve_knowledge()` 返回空列表，流程自动降级为「仅依赖模型与联网检索」
 - **结构化提取失败**：前端用 Markdown 解析兜底，功能不中断
 - **质量体检失败/极速模式**：评分静默跳过，不推评分卡，方案正文不受影响
+- **硬规则校验失败**：verify 节点吞掉异常返回空 rules，前端不上卡片；校验挂在 extract 之后，不占用任何模型调用
 - **某一段设计超时**：保留已生成内容，标注「待补充」，可让模型补写
 - **模型超时/限流/鉴权失败**：统一转中文友好提示，经 SSE `error` 推送
 - **收尾断流**：正文完整时降级为提示，保留断点重试入口
@@ -297,8 +312,8 @@ edgeone makers dev       # http://localhost:8088
 ### 自动化测试
 
 ```bash
-pnpm test                        # 前端单元测试（vitest，19 个用例）
-.venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，82 个用例）
+pnpm test                        # 前端单元测试（vitest，32 个用例）
+.venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，185 个用例）
 pnpm typecheck                   # 全量类型检查
 pnpm build                       # 生产构建
 ```
@@ -313,6 +328,13 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 | 意图兜底正则（寒暄 / 短问句 / 跳过追问） | 约 30 | 模型抖动时的最后一道防线，误判会让「你好」触发一次 3 分钟的生成 |
 | 单段重写识别与拼接 | 约 20 | 拼接算法错了会直接丢用户的已有章节 |
 | 打印排版 Markdown 渲染 | 7 | 含 HTML 转义断言，防止方案内容注入 |
+| `fairness.py` 公平性硬规则 | 25 | 判定错了会把好方案判死、或放过硬伤；每条规则单独断言通过 / 失败 / 部分分三档 |
+| `trick_graph.py` 成立条件矩阵 | 13 | 误报会让用户无谓重写，漏报会让「DM 独占信息」漏网；重点测「手法写了但线索没写」的提示 |
+| `difficulty.py` 难度时长 | 10 | 系数改错会输出荒谬的时长；验证单调性、区间合法性、空数据不崩 |
+| `mdplan.py` Markdown 解析 | 15 | extract 失败时它是唯一的数据来源，章节残缺也不能抛异常 |
+| `verify` 节点行为 | 11 | 挂在主链路上：跳过条件、正文兜底、异常吞咽都必须严格，否则会拖垮交付 |
+| `telemetry.py` 运行指标 | 20 | P95/成功率算错会误导优化方向；验证分位数、阶段聚合、容量淘汰 |
+| trace 集成（handler 全链路） | 9 | 用假模型跑完真实 SSE 序列，验证 trace 真被记录、心跳不算阶段、错误被聚合 |
 
 写测试过程中发现并修复的真实缺陷：
 
@@ -331,10 +353,11 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - [x] 单元测试：parsePlan、意图正则、单段拼接、打印渲染 + CI
 - [x] 单段重写：只重写指定部分，其余章节原样保留（不必整篇重生成）
 - [x] 打印 / PDF 导出：A4 排版 + 浏览器打印，另存为 PDF
-- [ ] 公平性规则引擎：把 rubric 打分升级为可执行的硬校验（线索出处闭环、不在场证明可戳穿性）
+- [x] 公平性规则引擎：15 条确定性硬校验 + 成立条件×线索覆盖矩阵 + 一键回填缺口（verify 节点，零模型调用）
 - [x] 诡计查重：历史方案指纹比对（metadata 零额外存储），命中注入避开指令，用户点名同类型时要求差异化
 - [ ] 角色立绘：每个角色单独生成，多图一致性（seed 固定）
-- [ ] 玩家侧视图：同一份数据的权限化渲染（遮罩凶手/真相）
+- [x] 运行指标：全链路 trace / P95 / 阶段耗时 / 规则失败排行（📊 面板）
+- [ ] 玩家侧视图：同一份数据的权限化渲染（沉浸模式级，玩家版 Word 导出已实现）
 - [ ] 分享链接：只读 URL 分享 + 批注协作
 
 ## FAQ
@@ -354,6 +377,12 @@ A: 是轻量版（RAG-lite）：关键词加权匹配 + tags 别名归一化，�
 Q: 防同质化靠知识库吗？
 
 A: 不是。知识库负责「写得专业」，防「写得重复」靠诡计查重：历史方案的 trick_types 与核心手法名作为指纹，与当前需求比对，命中则向提示词注入避开与差异化指令。两套机制各管一头。
+
+**Q: 硬规则校验和质量体检评分有什么区别？**
+A: 质量体检是模型按 rubric 给的「软分」，评的是好不好玩、详略是否得当；硬规则是纯代码算的「硬分」，验的是结构上成不成立（凶手在不在角色表、线索有没有获取方式、死亡时间对不对得上时间线）。前者会漂移，后者可复现——两张卡并列展示，互相印证。
+
+**Q: 关键词匹配的成立条件矩阵会误判吗？**
+A: 会，这是刻意取舍。规则只统计「玩家可见材料里有没有相关物证」，宁可漏报也不误伤：匹配不到时还会区分「手法里写了但线索没写」（提示补线索）与「完全没提」（提示补设定）。如果一条线索措辞完全避开了关键词，它会被漏掉——这类漏检由模型自评的质量体检兜底，两套机制互补。
 
 ## 安全与内容边界
 

@@ -17,6 +17,8 @@ class AgentState(TypedDict, total=False):
     design_markdown: str  # 设计节点实时流式产出的完整 Markdown 方案
     audit: dict[str, Any]
     quality: dict[str, Any]  # 四维质量评分（线索公平/锁凶闭环/时间线/红鲱鱼）
+    # 硬规则校验结果：fairness（15 条规则）+ trickGraph（成立条件×线索）+ difficulty（难度时长）
+    rules: dict[str, Any]
     intent: str
     qa: bool
     pending: bool  # True=已向用户提出追问，等待回答

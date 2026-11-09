@@ -1,4 +1,15 @@
-import type { ChatMessage, DonePayload, MetaPayload, PlanBrief, PlanData, PlanVersion, SessionItem, StreamHandlers } from '../types'
+import type {
+  ChatMessage,
+  DonePayload,
+  MetaPayload,
+  PlanBrief,
+  PlanData,
+  PlanRules,
+  PlanVersion,
+  SessionItem,
+  StatsSnapshot,
+  StreamHandlers,
+} from '../types'
 
 const CLIENT_ID_KEY = 'trick-designer-client-id'
 const AGENT_URL = '/trick-designer'
@@ -98,6 +109,16 @@ export async function getHistory(conversationId: string): Promise<ChatMessage[]>
 }
 
 /** 列出当前会话的历史方案版本（来自 checkpointer 的历史快照）。 */
+/** 读取后端运行指标（进程内最近 200 条请求的聚合，不含用户原文）。 */
+export async function getStats(conversationId: string): Promise<StatsSnapshot> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'stats' }),
+  })
+  return (await readJson(response)) as unknown as StatsSnapshot
+}
+
 export async function listVersions(conversationId: string): Promise<PlanVersion[]> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',
@@ -310,6 +331,8 @@ function handleEvent(event: string, data: unknown, handlers: StreamHandlers): vo
             : null,
         // 结构化方案：前端工具视图优先用它，缺失时才回退到 parsePlan 兜底解析
         plan: payload.plan && typeof payload.plan === 'object' ? (payload.plan as MetaPayload['plan']) : null,
+        // 硬规则校验：后端纯规则计算，缺省为 null（对比模式 / 结构化失败时不上卡片）
+        rules: payload.rules && typeof payload.rules === 'object' ? (payload.rules as PlanRules) : null,
       }
       handlers.onMeta?.(meta)
       break

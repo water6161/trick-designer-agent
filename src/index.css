@@ -2811,6 +2811,95 @@ button:disabled,
 .quality-hints { margin-top: 10px; padding-top: 9px; border-top: 1px dashed rgba(255, 255, 255, 0.1); }
 .quality-hints-label { font-size: 12px; color: #c98a5c; font-weight: 600; }
 
+/* ── 硬规则校验（确定性检查，与模型自评的质量体检卡并列）───────── */
+.rules-card {
+  margin: 4px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(120, 160, 200, 0.26);
+  border-radius: 12px;
+  background: rgba(22, 26, 32, 0.55);
+}
+.rules-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.rules-title { font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+.rules-score { font-size: 12px; padding: 2px 9px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.rules-score.ok { color: #8fd0a0; background: rgba(80, 170, 110, 0.14); }
+.rules-score.mid { color: #e0ab6a; background: rgba(210, 150, 70, 0.14); }
+.rules-score.bad { color: #e08a7a; background: rgba(200, 90, 70, 0.16); }
+.rules-summary { font-size: 12px; color: #8f97a4; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.rules-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.rules-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.55; }
+.rules-icon { flex-shrink: 0; width: 14px; text-align: center; font-weight: 700; }
+.rules-item.fail .rules-icon { color: #d9705f; }
+.rules-item.partial .rules-icon { color: #d8a25e; }
+.rules-item.pass .rules-icon { color: #7ac894; }
+.rules-label { flex-shrink: 0; color: #cfd5dd; }
+.rules-item.fail .rules-label { color: #e8b3a8; }
+.rules-detail { color: #8b929d; }
+.rules-allpass { margin: 6px 0 0; font-size: 12px; color: #7ac894; }
+.rules-section { margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1); }
+.rules-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; color: #c4cad3; margin-bottom: 7px;
+}
+.rules-coverage { font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: 999px; }
+.rules-coverage.good { color: #8fd0a0; background: rgba(80, 170, 110, 0.14); }
+.rules-coverage.mid { color: #e0ab6a; background: rgba(210, 150, 70, 0.14); }
+.rules-coverage.bad { color: #e08a7a; background: rgba(200, 90, 70, 0.16); }
+.rules-conditions { display: flex; flex-wrap: wrap; gap: 6px; }
+.rules-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; padding: 3px 9px; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1); color: #cfd5dd;
+}
+.rules-chip.ok { border-color: rgba(90, 170, 120, 0.35); background: rgba(60, 140, 95, 0.1); }
+.rules-chip.bad { border-color: rgba(200, 100, 80, 0.35); background: rgba(180, 80, 60, 0.12); color: #e5b0a4; }
+.rules-chip em { font-style: normal; color: #7f8794; font-size: 11px; letter-spacing: 0.02em; }
+.rules-gaps { margin: 8px 0 0; padding-left: 16px; font-size: 12px; color: #a9a194; line-height: 1.6; }
+.rules-gaps strong { color: #e0ab6a; font-weight: 600; }
+.rules-tier { font-size: 11.5px; padding: 1px 9px; border-radius: 999px; color: #d8a25e; background: rgba(200, 150, 70, 0.14); }
+.rules-difficulty { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: #cfd5dd; font-variant-numeric: tabular-nums; }
+.rules-note { margin: 6px 0 0; font-size: 11.5px; color: #8b929d; line-height: 1.55; }
+.rules-fix {
+  margin-top: 9px; padding: 6px 12px; font-size: 12px; cursor: pointer;
+  border-radius: 8px; color: #e5d5ae; background: rgba(201, 138, 92, 0.12);
+  border: 1px solid rgba(201, 138, 92, 0.34); transition: background 0.15s, border-color 0.15s;
+}
+.rules-fix:hover { background: rgba(201, 138, 92, 0.2); border-color: rgba(201, 138, 92, 0.6); }
+
+/* ── 运行指标面板 ───────────────────────── */
+.stats-panel { width: min(720px, 100%); max-height: 84vh; display: flex; flex-direction: column; overflow-y: auto; }
+.stats-head-actions { display: flex; gap: 6px; }
+.stats-empty { padding: 26px 18px; font-size: 13px; color: #9a9082; line-height: 1.7; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 4px 16px 14px; }
+.stats-cell {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 12px; border-radius: 10px;
+  background: #171a26; border: 1px solid #2c2818;
+}
+.stats-value { font-size: 18px; color: #e6dcc4; font-variant-numeric: tabular-nums; }
+.stats-value.ok { color: #8fd0a0; }
+.stats-value.mid { color: #e0ab6a; }
+.stats-label { font-size: 11px; color: #8d8371; }
+.stats-block { padding: 6px 16px 16px; }
+.stats-block h3 { font-size: 12.5px; color: #c98a5c; font-weight: 600; margin: 0 0 9px; letter-spacing: 0.02em; }
+.stats-bar-row { display: grid; grid-template-columns: 84px 1fr 56px; align-items: center; gap: 10px; margin-bottom: 7px; }
+.stats-bar-label { font-size: 11.5px; color: #b6aca3; }
+.stats-bar { height: 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.stats-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #7a5c3a, #d8a25e); }
+.stats-bar-value { font-size: 11.5px; color: #d9d0c7; text-align: right; font-variant-numeric: tabular-nums; }
+.stats-cost { margin: 0; font-size: 12.5px; color: #cfd5dd; font-variant-numeric: tabular-nums; }
+.stats-hint { margin: 5px 0 0; font-size: 11px; color: #7f8794; }
+.stats-errors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #e0b0a4; }
+.stats-error-count { display: inline-block; min-width: 28px; color: #d9705f; font-variant-numeric: tabular-nums; }
+.stats-table { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.stats-table th { text-align: left; color: #8d8371; font-weight: 500; padding: 5px 6px; border-bottom: 1px solid #2c2818; }
+.stats-table td { padding: 6px; color: #c4cad3; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+.stats-table td.ok { color: #7ac894; }
+.stats-table td.bad { color: #d9705f; }
+.stats-trace { color: #7f8794; letter-spacing: 0.04em; }
+.stats-btn { padding: 6px 10px; font-size: 13px; }
+
+
 /* ── 版本历史 ───────────────────────────── */
 .version-panel { width: min(680px, 100%); max-height: 82vh; display: flex; flex-direction: column; }
 .version-head { align-items: flex-start; }
@@ -2842,3 +2931,15 @@ button:disabled,
 }
 .version-restore:hover:not(:disabled) { border-color: #c98a5c; color: #e8d9ae; }
 .version-restore:disabled { opacity: 0.5; cursor: default; }
+
+.stats-bar-row-rule { display: flex; flex-direction: column; gap: 6px; grid-template-columns: none; }
+.stats-rule-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #c4cad3; }
+.stats-rule-count { color: #e0ab6a; font-variant-numeric: tabular-nums; }
+
+/* ── 本次生成耗时条 ── */
+.run-meta {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  margin: 2px 0 14px; padding-left: 2px;
+  font-size: 11.5px; color: #7f8794; font-variant-numeric: tabular-nums;
+}
+.run-meta-trace { letter-spacing: 0.04em; color: #6b7280; }

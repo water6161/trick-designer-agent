@@ -12,12 +12,16 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from pydantic import BaseModel, ValidationError
 
-from .config import EnvConfig
+from . import dedup, telemetry
 from .amap import extract_place, fetch_weather_note
-from . import dedup
+from .config import EnvConfig
+from .difficulty import estimate_difficulty
+from .fairness import check_fairness, summary_line
 from .kb import retrieve_knowledge
 from .logger import create_logger
+from .mdplan import parse_plan_from_markdown
 from .models import get_model
+from .trick_graph import build_gap_instruction, build_trick_graph
 from .prompts import (
     AUDIT_SYSTEM,
     COMPOSE_QA_SYSTEM,
@@ -538,6 +542,7 @@ async def design(
             brief, state.get("used_tricks") or []
         )
         or None,
+        "硬规则校验发现的逻辑缺口（本轮优先补齐）": _gap_hint(state) if previous_markdown else None,
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:10]
@@ -715,6 +720,58 @@ async def extract(
     return {"design": design, "audit": audit}
 
 
+async def verify(
+    state: AgentState, config: RunnableConfig, *, env: EnvConfig | None = None
+) -> dict[str, Any]:
+    """硬规则校验：确定性验证方案能不能开本，并给出诡计成立条件的线索覆盖矩阵。
+
+    与 score 节点的区别：
+    - score 让模型自评「好不好」，软判断，可能两次打分不一样；
+    - verify 用规则验「成不成立」，纯计算、可复现、可单测，结论能直接摆给用户看。
+
+    三条产出：
+    - fairness：15 条硬规则加权得分（凶手在不在角色表、证据链几环、线索有没有获取方式…）
+    - trickGraph：核心诡计的成立条件 × 线索覆盖矩阵，缺哪条一目了然
+    - difficulty：难度档位与建议时长
+
+    全部失败静默降级：校验是增值功能，不能拖垮交付。
+    """
+    writer = get_stream_writer()
+
+    # 多方案对比轮还没有正式方案，跳过
+    if state.get("mode") == "compared":
+        return {"rules": {}}
+
+    markdown = state.get("design_markdown") or ""
+    plan = state.get("design") or {}
+    if not plan:
+        # extract 失败时从正文兜底解析：正文一定存在，解析到多少算多少
+        plan = parse_plan_from_markdown(markdown)
+    if not (plan.get("clues_public") or plan.get("clues_deep") or plan.get("characters")):
+        logger.log("verify skipped: no structured plan available")
+        return {"rules": {}}
+
+    writer({"event": "status", "stage": "verify", "label": "正在跑硬规则校验"})
+
+    try:
+        fairness = check_fairness(plan, markdown)
+        trick_graph = build_trick_graph(plan)
+        difficulty = estimate_difficulty(plan)
+    except Exception as exc:  # noqa: BLE001 - 校验失败不影响方案交付
+        logger.exception("verify failed", exc)
+        return {"rules": {}}
+
+    telemetry.record_rules(fairness.get("checks") or [])
+    writer({"event": "notice", "message": summary_line(fairness)})
+    return {
+        "rules": {
+            "fairness": fairness,
+            "trickGraph": trick_graph,
+            "difficulty": difficulty,
+        }
+    }
+
+
 async def score(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
@@ -732,7 +789,7 @@ async def score(
 
     # 极速模式跳过：省下这一次模型调用换取整体提速
     if _speed_mode(state):
-        logger.info("score skipped in speed mode")
+        logger.log("score skipped in speed mode")
         return {"quality": {}}
 
     model = get_model(env, "answer")
@@ -805,6 +862,7 @@ async def compose(
     design = state.get("design") or {}
     audit_data = state.get("audit") or {}
     quality = state.get("quality") or {}
+    rules = state.get("rules") or {}
     brief = state.get("brief") or {}
     research = state.get("research") or []
     title = _compose_title(state)
@@ -816,6 +874,7 @@ async def compose(
             "genre": brief.get("genre"),
             "lock_score": audit_data.get("lock_score"),
             "quality": quality or None,
+            "rules": rules or None,
             "source_count": len(research),
             "brief": {
                 "genre": brief.get("genre"),
@@ -871,3 +930,19 @@ def after_understand(state: AgentState) -> str:
 def _speed_mode(state: AgentState) -> bool:
     """用户消息含【极速模式】标记时，设计与自查改用轻量模型，大幅提速。"""
     return "极速" in _last_user_text(state)
+
+
+def _gap_hint(state: AgentState) -> str | None:
+    """把上一轮硬规则校验查出的逻辑缺口，转成本轮必须补齐的约束。
+
+    这是「检出 → 修复」的闭环：verify 节点说缺什么，design 节点就被告知补什么。
+    只在迭代（已有方案）时生效，首次生成没有上一轮结论可参考。
+    """
+    rules = state.get("rules") or {}
+    graph = rules.get("trickGraph") or {}
+    gaps = graph.get("gaps") or []
+    if gaps:
+        lines = [f"- {gap.get('label')}：{gap.get('hint')}" for gap in gaps[:4]]
+        return "上一轮硬规则校验发现以下成立条件缺少玩家可见线索支撑，本轮必须补齐（其余内容保持不变）：\n" + "\n".join(lines)
+    # 没有 rules 时（例如规则校验被跳过）退回现算一次，成本极低
+    return build_gap_instruction(state.get("design"))
