@@ -150,6 +150,25 @@ export async function listVersions(conversationId: string): Promise<PlanVersion[
   return Array.isArray(data.versions) ? data.versions : []
 }
 
+/** 只读取某个历史版本的正文，不写回会话状态（用于版本对比）。 */
+export async function getVersionContent(
+  conversationId: string,
+  checkpointId: string,
+): Promise<{ markdown: string; title: string; chars: number }> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'version_content', checkpoint_id: checkpointId }),
+  })
+  const data = (await readJson(response)) as { markdown?: string; title?: string; chars?: number }
+  if (!data.markdown) throw new Error('这个版本没有可对比的方案正文')
+  return {
+    markdown: data.markdown,
+    title: data.title || '历史版本',
+    chars: typeof data.chars === 'number' ? data.chars : data.markdown.length,
+  }
+}
+
 /** 把会话状态回退到指定版本，返回该版本的方案正文。 */
 export async function restoreVersion(conversationId: string, checkpointId: string): Promise<{ markdown: string; title: string }> {
   const response = await fetch(AGENT_URL, {

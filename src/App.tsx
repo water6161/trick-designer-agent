@@ -604,6 +604,7 @@ function MainApp() {
         <Suspense fallback={<PanelFallback />}>
           <VersionHistory
             conversationId={activeId}
+            currentMarkdown={latestMarkdown}
             onClose={() => setShowVersions(false)}
             onRestored={(markdown, title) => {
               setMessages((prev) => [

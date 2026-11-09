@@ -144,6 +144,14 @@ function chatStream(): string {
   ].join('')
 }
 
+/** 旧版本正文：只有开头一节，用于验证 diff 能算出大量新增并定位到章节 */
+const OLD_MARKDOWN = `# 《雪落无声的第七夜》
+
+## 一、案件速览
+
+暴雪封山第四天，山庄与外界断联。旧版到这里就结束了。
+`
+
 async function mockAgent(page: Page): Promise<void> {
   await page.route('**/trick-designer', async (route) => {
     let action = ''
@@ -162,6 +170,20 @@ async function mockAgent(page: Page): Promise<void> {
       })
     }
     if (action === 'export') return route.fulfill({ json: { title: PLAN.title, plan: PLAN, markdown: MARKDOWN } })
+    if (action === 'versions') {
+      return route.fulfill({
+        json: {
+          versions: [
+            { checkpointId: 'cp-new', createdAt: '2026-03-01T10:00:00Z', chars: MARKDOWN.length, title: PLAN.title, hasPlaceholder: false, next: [] },
+            { checkpointId: 'cp-old', createdAt: '2026-03-01T09:00:00Z', chars: 900, title: PLAN.title, hasPlaceholder: false, next: [] },
+          ],
+        },
+      })
+    }
+    if (action === 'version_content') {
+      // 旧版少了「痕迹处理」相关段落，用来验证 diff 能定位到章节
+      return route.fulfill({ json: { markdown: OLD_MARKDOWN, title: PLAN.title, chars: OLD_MARKDOWN.length } })
+    }
     return route.fulfill({ json: {} })
   })
   // 静态资源照常走网络，只拦业务接口；其余请求交给 vite
@@ -308,4 +330,30 @@ test('键盘可达：弹层是 dialog 语义，Esc 直接关闭', async ({ page 
 
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
+})
+
+test('版本对比：选历史版本看差异，章节汇总与逐行标色都在', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🕰 版本历史' }).click()
+
+  const dialog = page.getByRole('dialog', { name: '版本历史' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('.version-item')).toHaveCount(2)
+
+  await dialog.locator('.version-compare').last().click()
+
+  // 进入对比视图：一句话结论 + 章节汇总 + 逐行差异
+  await expect(dialog).toContainText('版本对比')
+  await expect(dialog.locator('.diff-summary')).toContainText('新增')
+  await expect(dialog.locator('.diff-sections')).toContainText('案件速览')
+  await expect(dialog.locator('.diff-line.add').first()).toBeVisible()
+  // 旧版只有一句被改写的话，必然出现删除行
+  await expect(dialog.locator('.diff-line.del').first()).toBeVisible()
+
+  // 返回列表后还能正常回退
+  await dialog.getByRole('button', { name: '← 返回版本列表' }).click()
+  await expect(dialog.locator('.version-item')).toHaveCount(2)
 })

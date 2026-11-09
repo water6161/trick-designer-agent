@@ -625,6 +625,35 @@ async def _handle_versions(graph: Any, config: dict[str, Any]) -> dict[str, Any]
     return {"versions": versions}
 
 
+async def _handle_version_content(graph: Any, config: dict[str, Any], checkpoint_id: str) -> dict[str, Any]:
+    """只读取某个历史版本的正文，不写回状态。
+
+    版本对比需要一个旧版本的全文，而 restore 会顺手把状态改掉——「看一眼差异」
+    不该产生副作用，所以单独开一个只读入口。
+    """
+    if not checkpoint_id:
+        return {"error": "缺少版本标识。"}
+    try:
+        async for snapshot in graph.aget_state_history(config, limit=_VERSION_SCAN_LIMIT):
+            current = (getattr(snapshot, "config", {}) or {}).get("configurable", {}).get("checkpoint_id")
+            if current != checkpoint_id:
+                continue
+            values = getattr(snapshot, "values", None) or {}
+            markdown = str(values.get("design_markdown") or "")
+            if len(markdown) < _MIN_PLAN_CHARS:
+                return {"error": "这个版本没有可对比的方案正文。"}
+            return {
+                "markdown": markdown,
+                "title": _title_from_markdown(markdown),
+                "chars": len(markdown),
+                "createdAt": getattr(snapshot, "created_at", None),
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("read version content failed", exc)
+        return {"error": "读取版本内容失败，请稍后重试。"}
+    return {"error": "没找到这个版本，可能已被清理，请刷新后重试。"}
+
+
 async def _handle_restore(graph: Any, config: dict[str, Any], checkpoint_id: str) -> dict[str, Any]:
     if not checkpoint_id:
         return {"error": "缺少版本标识。"}
@@ -728,7 +757,7 @@ async def handler(context: Any):
     if action == "delete":
         target = str(body.get("conversation_id") or conversation_id)
         return await _handle_delete(store, target)
-    if action in ("versions", "restore"):
+    if action in ("versions", "restore", "version_content"):
         try:
             version_env = load_env(context.env)
             init_models(version_env)
@@ -743,6 +772,10 @@ async def handler(context: Any):
         version_config = {"configurable": {"thread_id": conversation_id}}
         if action == "versions":
             return await _handle_versions(version_graph, version_config)
+        if action == "version_content":
+            return await _handle_version_content(
+                version_graph, version_config, str(body.get("checkpoint_id") or "")
+            )
         return await _handle_restore(version_graph, version_config, str(body.get("checkpoint_id") or ""))
     if action == "export":
         return await _handle_export(store, conversation_id)
