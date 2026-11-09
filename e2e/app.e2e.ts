@@ -404,3 +404,49 @@ test('玩家本打印版式：打印媒体下变白底黑字，操作按钮隐�
   await page.emulateMedia({ media: 'screen' })
   await expect(panel.locator('.pv-print')).toBeVisible()
 })
+
+test('会话列表：搜索过滤 + 删除需要点两次', async ({ page }) => {
+  const today = new Date().toISOString()
+  // 单独覆盖会话列表，不影响其他用例的 mock
+  await page.route('**/trick-designer', async (route) => {
+    let action = ''
+    try {
+      action = String(JSON.parse(route.request().postData() || '{}').action || '')
+    } catch {
+      action = ''
+    }
+    if (action !== 'sessions') return route.fallback()
+    return route.fulfill({
+      json: {
+        sessions: [
+          { id: 's1', title: '雪落无声的第七夜', updatedAt: today },
+          { id: 's2', title: '血色婚礼', updatedAt: today },
+          { id: 's3', title: '灯塔守夜人', updatedAt: today },
+          { id: 's4', title: '雪夜访客', updatedAt: today },
+        ],
+      },
+    })
+  })
+  await page.goto('/')
+
+  const sidebar = page.getByRole('complementary', { name: '会话列表' })
+  await expect(sidebar.locator('.session-item')).toHaveCount(4)
+
+  const search = page.getByRole('searchbox', { name: '搜索会话' })
+  await search.fill('雪')
+  await expect(sidebar.locator('.session-item')).toHaveCount(2)
+  await expect(sidebar.locator('.session-label')).toContainText('匹配 2 个')
+
+  await search.fill('没有这个剧本')
+  await expect(sidebar.locator('.session-item')).toHaveCount(0)
+  await expect(sidebar.locator('.session-empty')).toContainText('没有标题含')
+
+  await search.fill('')
+  await expect(sidebar.locator('.session-item')).toHaveCount(4)
+
+  // 删除要点两次：第一次只进入确认态，会话还在
+  const del = sidebar.getByRole('button', { name: '删除会话 血色婚礼' })
+  await del.click()
+  await expect(sidebar.locator('.session-item')).toHaveCount(4)
+  await expect(page.getByRole('button', { name: '确认删除会话 血色婚礼' })).toBeVisible()
+})

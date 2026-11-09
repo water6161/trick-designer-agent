@@ -3465,3 +3465,45 @@ button:disabled,
     page-break-inside: avoid;
   }
 }
+
+/* ── 会话列表：搜索、时间分组、删除确认 ── */
+.session-search {
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: #12151d;
+  border: 1px solid #262d3a;
+  border-radius: 9px;
+}
+.session-search::placeholder {
+  color: #5d6577;
+}
+.session-search:focus {
+  outline: none;
+  border-color: #5b7fa3;
+}
+.session-group + .session-group {
+  margin-top: 6px;
+}
+.session-group-label {
+  padding: 12px 8px 5px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #5d6577;
+}
+.session-delete.confirming {
+  width: auto;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #e0a3a3;
+  background: rgba(176, 88, 88, 0.16);
+  border-radius: 7px;
+}
+.session-delete.confirming:hover {
+  color: #ffd0d0;
+  background: rgba(176, 88, 88, 0.28);
+}

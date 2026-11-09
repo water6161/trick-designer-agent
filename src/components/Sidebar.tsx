@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from 'react'
 import { CloseIcon, PlusIcon, TrashIcon } from './icons'
+import { filterSessions, groupSessions } from '../lib/sessionFilter'
 import type { SessionItem } from '../types'
 
 interface Props {
@@ -26,6 +28,9 @@ function formatTime(value?: string | null): string {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
+/** 会话攒到四条以上，靠日期辨认就不够用了——给个搜索框。 */
+const SEARCH_THRESHOLD = 4
+
 export default function Sidebar({
   sessions,
   activeId,
@@ -35,6 +40,19 @@ export default function Sidebar({
   onDelete,
   onClose,
 }: Props) {
+  const [query, setQuery] = useState('')
+  // 删除会话不可逆（连历史带状态一起没），所以要点两次：第一次只把按钮变成「确认」
+  const [pendingDelete, setPendingDelete] = useState('')
+
+  useEffect(() => {
+    if (!pendingDelete) return
+    const timer = setTimeout(() => setPendingDelete(''), 4000)
+    return () => clearTimeout(timer)
+  }, [pendingDelete])
+
+  const groups = useMemo(() => groupSessions(filterSessions(sessions, query)), [sessions, query])
+  const matched = groups.reduce((sum, group) => sum + group.items.length, 0)
+
   return (
     <aside className={`sidebar ${open ? 'sidebar-open' : ''}`} aria-label="会话列表">
       <div className="brand">
@@ -55,28 +73,62 @@ export default function Sidebar({
         <span>新建对话</span>
       </button>
 
-      <div className="session-label">最近的剧本</div>
+      {sessions.length >= SEARCH_THRESHOLD && (
+        <input
+          className="session-search"
+          type="search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setPendingDelete('')
+          }}
+          placeholder="搜剧本名"
+          aria-label="搜索会话"
+        />
+      )}
+
+      <div className="session-label">{query.trim() ? `匹配 ${matched} 个` : '最近的剧本'}</div>
       <div className="session-list">
         {sessions.length === 0 && <p className="session-empty">还没有会话，输入一个题材开始。</p>}
-        {sessions.map((session) => (
-          <div
-            key={session.id}
-            className={`session-item ${session.id === activeId ? 'active' : ''}`}
-          >
-            <button className="session-main" onClick={() => onSelect(session.id)}>
-              <span className="session-title">{session.title}</span>
-              <span className="session-time">{formatTime(session.updatedAt)}</span>
-            </button>
-            <button
-              className="session-delete"
-              aria-label={`删除会话 ${session.title}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                onDelete(session.id)
-              }}
-            >
-              <TrashIcon />
-            </button>
+
+        {sessions.length > 0 && matched === 0 && (
+          <p className="session-empty">没有标题含「{query.trim()}」的会话。</p>
+        )}
+
+        {groups.map((section) => (
+          <div className="session-group" key={section.group}>
+            <div className="session-group-label">{section.group}</div>
+            {section.items.map((session) => {
+              const confirming = pendingDelete === session.id
+              return (
+                <div
+                  key={session.id}
+                  className={`session-item ${session.id === activeId ? 'active' : ''}`}
+                >
+                  <button className="session-main" onClick={() => onSelect(session.id)}>
+                    <span className="session-title">{session.title}</span>
+                    <span className="session-time">{formatTime(session.updatedAt)}</span>
+                  </button>
+                  <button
+                    className={`session-delete ${confirming ? 'confirming' : ''}`}
+                    aria-label={
+                      confirming ? `确认删除会话 ${session.title}` : `删除会话 ${session.title}`
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (!confirming) {
+                        setPendingDelete(session.id)
+                        return
+                      }
+                      setPendingDelete('')
+                      onDelete(session.id)
+                    }}
+                  >
+                    {confirming ? '确认' : <TrashIcon />}
+                  </button>
+                </div>
+              )
+            })}
           </div>
         ))}
       </div>
