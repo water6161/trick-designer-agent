@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ChatMessage from './components/ChatMessage'
 import Composer from './components/Composer'
 import ExportBar from './components/ExportBar'
@@ -12,6 +12,7 @@ import TimelineView from './components/TimelineView'
 import DMView from './components/DMView'
 import RoleCards from './components/RoleCards'
 import RescuePanel from './components/RescuePanel'
+import VersionHistory from './components/VersionHistory'
 import QualityCard from './components/QualityCard'
 import { MenuIcon } from './components/icons'
 import {
@@ -46,6 +47,7 @@ export default function App() {
   const [showDM, setShowDM] = useState(false)
   const [showRoles, setShowRoles] = useState(false)
   const [showRescue, setShowRescue] = useState(false)
+  const [showVersions, setShowVersions] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [quality, setQuality] = useState<QualityScore | null>(null)
 
@@ -324,9 +326,17 @@ export default function App() {
   const activeSession = sessions.find((item) => item.id === activeId)
   const headerTitle = activeSession?.title || (messages.length > 0 ? '新剧本' : '新对话')
   const loading = hydrating || hydratingHistory
-  const hasPlan = messages.some((item) => item.role === 'assistant' && item.content.length > 200)
-  const latestMarkdown =
-    [...messages].reverse().find((m) => m.role === 'assistant' && m.content.length > 200)?.content || ''
+  // 流式生成时 token 每秒 flush 十几次，这两个派生值若每帧重算就是 O(n²)：
+  // 遍历全部消息 + 复制数组反转。用 useMemo 挂在 messages 上，只在消息真正变化时重算。
+  const { hasPlan, latestMarkdown } = useMemo(() => {
+    // 从后往前找第一条长回复：既拿到最新方案正文，也顺带判定是否已有方案
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const item = messages[i]
+      if (item.role !== 'assistant' || item.content.length <= 200) continue
+      return { hasPlan: true, latestMarkdown: item.content }
+    }
+    return { hasPlan: false, latestMarkdown: '' }
+  }, [messages])
 
   return (
     <div className="app">
@@ -369,6 +379,7 @@ export default function App() {
                     <button onClick={() => { setToolsOpen(false); setShowTimeline(true) }}>🔗 证据链时间线</button>
                     <button onClick={() => { setToolsOpen(false); setShowRoles(true) }}>🃏 角色速览卡</button>
                     <button onClick={() => { setToolsOpen(false); setShowRescue(true) }}>🆘 救场手册</button>
+                    <button onClick={() => { setToolsOpen(false); setShowVersions(true) }}>🕰 版本历史</button>
                   </div>
                 )}
               </div>
@@ -404,6 +415,20 @@ export default function App() {
         <RescuePanel markdown={latestMarkdown} onClose={() => setShowRescue(false)} />
       )}
 
+      {showVersions && hasPlan && (
+        <VersionHistory
+          conversationId={activeId}
+          onClose={() => setShowVersions(false)}
+          onRestored={(markdown, title) => {
+            setMessages((prev) => [
+              ...prev,
+              { id: newConversationId(), role: 'assistant', content: markdown, createdAt: new Date().toISOString() },
+            ])
+            setNotice(`已回退到「${title}」，后续修改会基于这一版进行。`)
+          }}
+        />
+      )}
+
       {showRoles && hasPlan && (
         <RoleCards markdown={latestMarkdown} onClose={() => setShowRoles(false)} />
       )}
@@ -437,7 +462,7 @@ export default function App() {
         {!streaming && !loading && (
           <RequirementBuilder
             onSend={(text) => void send(text)}
-            hasPlan={messages.some((item) => item.role === 'assistant' && item.content.length > 200)}
+            hasPlan={hasPlan}
             disabled={loading}
           />
         )}

@@ -2810,3 +2810,35 @@ button:disabled,
 .quality-list li { margin-bottom: 3px; }
 .quality-hints { margin-top: 10px; padding-top: 9px; border-top: 1px dashed rgba(255, 255, 255, 0.1); }
 .quality-hints-label { font-size: 12px; color: #c98a5c; font-weight: 600; }
+
+/* ── 版本历史 ───────────────────────────── */
+.version-panel { width: min(680px, 100%); max-height: 82vh; display: flex; flex-direction: column; }
+.version-head { align-items: flex-start; }
+.version-sub { font-size: 12px; color: #8d8371; margin: 5px 0 0; }
+.version-tip { padding: 22px 18px; font-size: 13px; color: #9a9082; }
+.version-error { padding: 14px 18px; font-size: 13px; color: #e0806f; }
+.version-list { list-style: none; margin: 0; padding: 10px 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.version-item {
+  display: flex; align-items: center; gap: 12px;
+  background: #171a26; border: 1px solid #2c2818; border-radius: 10px; padding: 11px 14px;
+}
+.version-index {
+  flex-shrink: 0; width: 34px; text-align: center; font-size: 12px;
+  color: #c98a5c; font-variant-numeric: tabular-nums; letter-spacing: 0.03em;
+}
+.version-body { flex: 1; min-width: 0; }
+.version-title {
+  font-size: 13px; color: #e2d8bf; display: flex; align-items: center; gap: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.version-badge {
+  flex-shrink: 0; font-size: 11px; padding: 1px 7px; border-radius: 999px;
+  color: #d8a25e; background: rgba(200, 150, 70, 0.14);
+}
+.version-meta { font-size: 11.5px; color: #8d8371; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.version-restore {
+  flex-shrink: 0; font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  color: #d8cfb4; background: transparent; border: 1px solid #3a3427; transition: border-color 0.15s, color 0.15s;
+}
+.version-restore:hover:not(:disabled) { border-color: #c98a5c; color: #e8d9ae; }
+.version-restore:disabled { opacity: 0.5; cursor: default; }

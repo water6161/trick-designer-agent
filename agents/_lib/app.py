@@ -252,6 +252,43 @@ def _user_id(context: Any) -> str:
     return raw if USER_ID_PATTERN.match(raw) else "anonymous"
 
 
+# ── 用户级限流：防止连点烧掉模型与生图额度 ──
+# 进程内滑动窗口，多实例部署时是「近似限制」，只作为第一层防护；
+# 组件的任何异常都必须放行，绝不能让限流本身把正常用户挡在门外。
+_RATE_BUCKETS: dict[str, list[float]] = {}
+_RATE_LIMIT_RULES: dict[str, tuple[int, int]] = {
+    "generate": (10, 600),   # 生成：10 分钟内最多 10 次
+    "ai_cover": (5, 600),    # 生图：10 分钟内最多 5 次
+}
+
+
+def _check_rate_limit(user_id: str, kind: str) -> int:
+    """返回 0 表示放行；>0 表示需要等待的秒数。"""
+    try:
+        limit, window = _RATE_LIMIT_RULES[kind]
+        if user_id == "anonymous":
+            # 未带 x-client-id 的请求共用一个桶，严格限流会互相误伤，放宽三倍仍保留兜底
+            limit *= 3
+        now = time.time()
+        key = f"{kind}:{user_id}"
+        bucket = [stamp for stamp in _RATE_BUCKETS.get(key, []) if now - stamp < window]
+        if len(bucket) >= limit:
+            wait = int(window - (now - bucket[0])) + 1
+            _RATE_BUCKETS[key] = bucket
+            return max(wait, 1)
+        bucket.append(now)
+        _RATE_BUCKETS[key] = bucket
+        # 顺手清理过期键，避免长期运行后字典无限增长
+        if len(_RATE_BUCKETS) > 200:
+            for old_key in list(_RATE_BUCKETS):
+                stamps = _RATE_BUCKETS.get(old_key) or []
+                if not stamps or now - stamps[-1] > window * 2:
+                    _RATE_BUCKETS.pop(old_key, None)
+        return 0
+    except Exception:  # noqa: BLE001 - 限流故障不能阻断业务
+        return 0
+
+
 async def _append_message(
     store: Any,
     conversation_id: str,
@@ -673,6 +710,85 @@ async def _handle_delete(store: Any, conversation_id: str) -> dict[str, Any]:
         return {"ok": False, "error": "删除会话失败，请稍后重试。"}
 
 
+# ── 方案版本历史：直接复用 checkpointer 已存的历史快照，不另建存储 ──
+
+_VERSION_SCAN_LIMIT = 60      # 最多回扫多少个 checkpoint
+_VERSION_RETURN_LIMIT = 12    # 返回给前端的版本数上限
+_MIN_PLAN_CHARS = 200         # 少于这个长度视为没有方案正文
+
+
+def _title_from_markdown(md: str) -> str:
+    for line in md.splitlines():
+        text = line.strip().lstrip("#").strip()
+        if text and len(text) <= 40:
+            return text.strip("《》")
+    return "未命名剧本"
+
+
+async def _handle_versions(graph: Any, config: dict[str, Any]) -> dict[str, Any]:
+    versions: list[dict[str, Any]] = []
+    try:
+        async for snapshot in graph.aget_state_history(config, limit=_VERSION_SCAN_LIMIT):
+            values = getattr(snapshot, "values", None) or {}
+            markdown = str(values.get("design_markdown") or "")
+            if len(markdown) < _MIN_PLAN_CHARS:
+                continue
+            checkpoint_id = (getattr(snapshot, "config", {}) or {}).get("configurable", {}).get("checkpoint_id")
+            if not checkpoint_id:
+                continue
+            versions.append(
+                {
+                    "checkpointId": checkpoint_id,
+                    "createdAt": getattr(snapshot, "created_at", None),
+                    "chars": len(markdown),
+                    "title": _title_from_markdown(markdown),
+                    "hasPlaceholder": "待补充" in markdown,
+                    "next": list(getattr(snapshot, "next", None) or []),
+                }
+            )
+            if len(versions) >= _VERSION_RETURN_LIMIT:
+                break
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("get_state_history failed", exc)
+        return {"versions": [], "error": "读取历史版本失败，请刷新页面重试。"}
+    return {"versions": versions}
+
+
+async def _handle_restore(graph: Any, config: dict[str, Any], checkpoint_id: str) -> dict[str, Any]:
+    if not checkpoint_id:
+        return {"error": "缺少版本标识。"}
+    try:
+        async for snapshot in graph.aget_state_history(config, limit=_VERSION_SCAN_LIMIT):
+            current = (getattr(snapshot, "config", {}) or {}).get("configurable", {}).get("checkpoint_id")
+            if current != checkpoint_id:
+                continue
+            values = getattr(snapshot, "values", None) or {}
+            markdown = str(values.get("design_markdown") or "")
+            if len(markdown) < _MIN_PLAN_CHARS:
+                return {"error": "这个版本没有可恢复的方案正文。"}
+            # 写回当前会话：下一轮迭代会以它作为「上一版方案」底稿。
+            # as_node=compose 让 LangGraph 认为收尾节点已完成，不会触发后续节点重跑。
+            await graph.aupdate_state(
+                config,
+                {
+                    "design_markdown": markdown,
+                    "design": values.get("design") or {},
+                    "audit": values.get("audit") or {},
+                    "quality": values.get("quality") or {},
+                },
+                as_node="compose",
+            )
+            return {
+                "markdown": markdown,
+                "title": _title_from_markdown(markdown),
+                "chars": len(markdown),
+            }
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("restore version failed", exc)
+        return {"error": "恢复版本失败，请稍后重试。"}
+    return {"error": "没找到这个版本，可能已被清理，请刷新后重试。"}
+
+
 # ───────────────────────── search tool ─────────────────────────
 
 
@@ -738,9 +854,28 @@ async def handler(context: Any):
     if action == "delete":
         target = str(body.get("conversation_id") or conversation_id)
         return await _handle_delete(store, target)
+    if action in ("versions", "restore"):
+        try:
+            version_env = load_env(context.env)
+            init_models(version_env)
+            version_graph = build_graph(
+                checkpointer=context.store.langgraph_checkpointer,
+                env=version_env,
+                search_tool=_search_tool(context),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("build graph for versions failed", exc)
+            return {"error": "读取版本历史失败，请稍后重试。"}
+        version_config = {"configurable": {"thread_id": conversation_id}}
+        if action == "versions":
+            return await _handle_versions(version_graph, version_config)
+        return await _handle_restore(version_graph, version_config, str(body.get("checkpoint_id") or ""))
     if action == "export":
         return await _handle_export(store, conversation_id)
     if action == "ai_cover":
+        wait = _check_rate_limit(user_id, "ai_cover")
+        if wait:
+            return {"error": f"生图请求太频繁了，请 {wait} 秒后再试。"}
         cover_style = str(body.get("cover_style") or "character")
         if cover_style not in ("character", "group", "scene"):
             cover_style = "character"
@@ -755,6 +890,11 @@ async def handler(context: Any):
         return await _handle_ai_cover(cover_env, store, conversation_id, cover_style)
     if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
+
+    wait = _check_rate_limit(user_id, "generate")
+    if wait:
+        logger.log("rate limited", {"userId": user_id, "wait": wait})
+        return {"error": f"请求太频繁了，请 {wait} 秒后再发起生成。"}
 
     message = str(body.get("message") or "").strip()
     if action == "chat" and not message:

@@ -1,4 +1,4 @@
-import type { ChatMessage, DonePayload, MetaPayload, PlanBrief, PlanData, SessionItem, StreamHandlers } from '../types'
+import type { ChatMessage, DonePayload, MetaPayload, PlanBrief, PlanData, PlanVersion, SessionItem, StreamHandlers } from '../types'
 
 const CLIENT_ID_KEY = 'trick-designer-client-id'
 const AGENT_URL = '/trick-designer'
@@ -95,6 +95,29 @@ export async function getHistory(conversationId: string): Promise<ChatMessage[]>
       createdAt: typeof item.createdAt === 'string' ? item.createdAt : null,
     }))
     .filter((item) => item.content.trim().length > 0)
+}
+
+/** 列出当前会话的历史方案版本（来自 checkpointer 的历史快照）。 */
+export async function listVersions(conversationId: string): Promise<PlanVersion[]> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'versions' }),
+  })
+  const data = (await readJson(response)) as { versions?: PlanVersion[] }
+  return Array.isArray(data.versions) ? data.versions : []
+}
+
+/** 把会话状态回退到指定版本，返回该版本的方案正文。 */
+export async function restoreVersion(conversationId: string, checkpointId: string): Promise<{ markdown: string; title: string }> {
+  const response = await fetch(AGENT_URL, {
+    method: 'POST',
+    headers: headers(conversationId),
+    body: JSON.stringify({ action: 'restore', checkpoint_id: checkpointId }),
+  })
+  const data = (await readJson(response)) as { markdown?: string; title?: string }
+  if (!data.markdown) throw new Error('这个版本没有可恢复的方案正文')
+  return { markdown: data.markdown, title: data.title || '历史版本' }
 }
 
 export async function deleteSession(conversationId: string): Promise<void> {

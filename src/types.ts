@@ -13,6 +13,16 @@ export interface SessionItem {
   updatedAt?: string | null
 }
 
+/** 方案版本快照（来自 checkpointer 的历史 checkpoint，不额外存储） */
+export interface PlanVersion {
+  checkpointId: string
+  createdAt?: string | null
+  chars: number
+  title: string
+  hasPlaceholder: boolean
+  next: string[]
+}
+
 export interface PlanBrief {
   genre?: string
   players?: string
