@@ -14,6 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from .config import EnvConfig
 from .amap import extract_place, fetch_weather_note
+from . import dedup
 from .kb import retrieve_knowledge
 from .logger import create_logger
 from .models import get_model
@@ -533,6 +534,10 @@ async def design(
         "需求": brief,
         "本轮改动": brief.get("modifications") or [],
         "本地知识库参考（可引用思路但不要照抄）": retrieve_knowledge(brief),
+        "历史已用诡计（本次务必避开这些套路角度，除非用户点名）": dedup.build_avoidance_hint(
+            brief, state.get("used_tricks") or []
+        )
+        or None,
         "联网检索资料（用于规避烂梗与雷点，不要照抄）": [
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:10]
@@ -816,6 +821,7 @@ async def compose(
                 "genre": brief.get("genre"),
                 "players": brief.get("players"),
                 "difficulty": brief.get("difficulty"),
+                "trick_types": brief.get("trick_types") or [],
             },
             "plan": design or None,
         }

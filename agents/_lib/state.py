@@ -23,3 +23,5 @@ class AgentState(TypedDict, total=False):
     mode: str  # ""=正常；"compare"=本轮输出多方案对比；"compared"=已对比，等用户选方向
     title: str
     user_id: str
+    # 用户历史方案的诡计指纹（由 app 层从会话 metadata 收集），design 节点据此注入避开指令
+    used_tricks: list[dict[str, Any]]

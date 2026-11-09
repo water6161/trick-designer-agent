@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator
 from langchain_core.messages import HumanMessage
 
 from .config import ConfigError, load_env
+from .dedup import collect_fingerprints
 from .graph import build_graph
 from .logger import create_logger
 from .models import init_models
@@ -282,6 +283,26 @@ async def _touch_conversation(store: Any, conversation_id: str, title: str) -> N
 
 
 # ───────────────────────── actions ─────────────────────────
+
+
+async def _collect_used_tricks(store: Any, user_id: str, exclude_conversation_id: str) -> list[dict[str, Any]]:
+    """收集用户历史方案的诡计指纹，供 design 节点注入避开指令。失败静默返回空列表。"""
+    try:
+        try:
+            result = await store.list_conversations(user_id=user_id, limit=50)
+        except TypeError:
+            result = await store.list_conversations(limit=50)
+        plain = _to_plain(result)
+        if isinstance(plain, dict):
+            items = plain.get("items") or []
+        elif isinstance(plain, list):
+            items = plain
+        else:
+            items = []
+        return collect_fingerprints(items, exclude_conversation_id=exclude_conversation_id)
+    except Exception as exc:  # noqa: BLE001 - 查重是增益功能，任何失败都不阻断生成
+        logger.warn("collect used tricks failed", str(exc))
+        return []
 
 
 async def _handle_sessions(store: Any, user_id: str) -> dict[str, Any]:
@@ -826,11 +847,15 @@ async def handler(context: Any):
         return context.utils.stream_sse(generate(initial=None, append_user=False))
 
     logger.log("chat start", {"conversationId": conversation_id, "chars": len(message)})
+    used_tricks = await _collect_used_tricks(store, user_id, conversation_id)
+    if used_tricks:
+        logger.log("dedup fingerprints", {"count": len(used_tricks)})
     return context.utils.stream_sse(
         generate(
             initial={
                 "messages": [HumanMessage(content=message)],
                 "user_id": user_id,
+                "used_tricks": used_tricks,
             },
             append_user=True,
         )
