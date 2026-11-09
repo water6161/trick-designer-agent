@@ -2943,3 +2943,191 @@ button:disabled,
   font-size: 11.5px; color: #7f8794; font-variant-numeric: tabular-nums;
 }
 .run-meta-trace { letter-spacing: 0.04em; color: #6b7280; }
+
+/* ═════════ 玩家本（无剧透视角 + 分享页） ═════════ */
+.pv-sheet { width: min(720px, 100%); }
+
+/* 分享页：整页铺开，去掉弹层阴影与圆角，像一张能直接读的本 */
+.pv-standalone {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  overflow: auto;
+  background: radial-gradient(1200px 600px at 50% -10%, #1b1d29 0%, #0b0d14 60%);
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+.pv-sheet-full {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  background: #12141d;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  max-height: none;
+}
+.pv-head-text h2 { font-size: 18px; margin: 0; color: #e8d9ae; }
+.pv-tagline { margin: 3px 0 0; font-size: 12.5px; color: #948a6d; }
+.pv-home {
+  font-size: 12px; color: #b09a55; text-decoration: none;
+  padding: 5px 10px; border-radius: 8px; border: 1px solid rgba(176, 154, 85, 0.35);
+  white-space: nowrap;
+}
+.pv-home:hover { background: rgba(176, 154, 85, 0.12); }
+
+.pv-scroll { overflow-y: auto; padding: 14px 20px 8px; flex: 1; }
+
+.pv-note {
+  position: relative; margin: 0 0 16px; padding: 10px 14px 10px 88px;
+  background: rgba(90, 130, 100, 0.09); border: 1px solid rgba(110, 150, 120, 0.28);
+  border-radius: 10px; font-size: 12.5px; line-height: 1.7; color: #a8bfae;
+}
+.pv-note strong { color: #cfe0d3; }
+.pv-note-badge {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px;
+  color: #cfe0d3; background: rgba(110, 150, 120, 0.22); border: 1px solid rgba(110, 150, 120, 0.4);
+}
+
+.pv-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 14px; }
+.pv-roles-label { font-size: 11.5px; color: #8a8066; letter-spacing: 0.08em; margin-right: 2px; }
+.pv-role-chip {
+  font-size: 12.5px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  color: #b8ae92; background: #171a26; border: 1px solid #2c2818; transition: all 0.15s;
+}
+.pv-role-chip:hover { border-color: #6b5f3a; color: #e8d9ae; }
+.pv-role-chip.on { background: #2a2313; border-color: #b09a55; color: #e8d9ae; font-weight: 600; }
+
+.pv-mine {
+  margin: 0 0 18px; padding: 14px 16px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(176, 154, 85, 0.14), rgba(176, 154, 85, 0.05));
+  border: 1px solid rgba(176, 154, 85, 0.34);
+}
+.pv-mine h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: 0.12em; color: #c9b273; }
+.pv-mine-card { display: flex; flex-direction: column; gap: 8px; }
+.pv-mine-name { margin: 0; font-size: 20px; font-weight: 700; color: #f0e4c4; }
+.pv-mine-identity { margin-left: 8px; font-size: 12.5px; font-weight: 400; color: #a89a76; }
+.pv-mine-row { margin: 0; font-size: 14px; line-height: 1.7; color: #d8cfb4; }
+.pv-mine-row strong {
+  display: block; font-size: 11.5px; letter-spacing: 0.08em; color: #b09a55;
+  margin-bottom: 2px; font-weight: 600;
+}
+
+.pv-block { margin: 0 0 20px; }
+.pv-block h3 {
+  margin: 0 0 9px; font-size: 13px; letter-spacing: 0.12em; color: #c9b273;
+  border-left: 3px solid #8a7a48; padding-left: 9px;
+}
+.pv-locked {
+  margin-left: 8px; font-size: 11px; letter-spacing: 0; font-weight: 400;
+  color: #7d7460; background: #1a1c26; border: 1px solid #2a2618;
+  padding: 1px 7px; border-radius: 6px;
+}
+.pv-body { margin: 8px 0 0; font-size: 14px; line-height: 1.85; color: #c5bb9d; white-space: pre-wrap; }
+
+.pv-victim { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.pv-victim li { font-size: 13.5px; color: #d8cfb4; line-height: 1.6; }
+.pv-victim li span {
+  display: inline-block; min-width: 62px; font-size: 11.5px; color: #8a8066;
+  letter-spacing: 0.06em;
+}
+.pv-victim li em { font-style: normal; color: #8a8066; }
+
+.pv-cast { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pv-cast li {
+  background: #171a26; border: 1px solid #2a2618; border-radius: 9px;
+  padding: 9px 12px; display: grid; grid-template-columns: 62px 1fr; gap: 4px 10px;
+  align-items: baseline;
+}
+.pv-cast-name { font-weight: 700; color: #e8d9ae; font-size: 14px; }
+.pv-cast-id { font-size: 12.5px; color: #9a927c; grid-column: 2; }
+.pv-cast-suspect { grid-column: 2; font-size: 12.5px; color: #a99b7c; line-height: 1.6; }
+
+.pv-clues { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pv-clues li {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 9px;
+  background: #171a26; border: 1px solid #2a2618; border-radius: 9px; padding: 9px 12px;
+  font-size: 13.5px; line-height: 1.65; color: #c5bb9d;
+}
+.pv-clue-id {
+  font-size: 11.5px; font-weight: 700; color: #e8d9ae; letter-spacing: 0.04em;
+  background: rgba(176, 154, 85, 0.16); border-radius: 5px; padding: 1px 6px;
+}
+.pv-clue-text { flex: 1 1 240px; }
+.pv-clue-text strong { color: #e0d6b6; margin-right: 7px; font-weight: 600; }
+.pv-clue-access { font-size: 11.5px; color: #7d7460; }
+.pv-clues-locked li { border-style: dashed; opacity: 0.78; }
+
+.pv-timeline { list-style: none; margin: 0; padding: 0 0 0 4px; position: relative; }
+.pv-timeline::before {
+  content: ''; position: absolute; left: 46px; top: 6px; bottom: 6px;
+  width: 1px; background: #2f2a1b;
+}
+.pv-timeline li { display: flex; gap: 14px; padding: 6px 0; font-size: 13.5px; }
+.pv-time {
+  width: 42px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums;
+  color: #b09a55; font-weight: 600;
+}
+.pv-event { flex: 1; color: #c5bb9d; line-height: 1.65; }
+.pv-event em { font-style: normal; color: #7d7460; font-size: 12px; }
+
+.pv-node {
+  background: #171a26; border: 1px solid #2a2618; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 9px;
+}
+.pv-node h4 { margin: 0 0 6px; font-size: 14px; color: #e0d6b6; }
+.pv-options { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 5px; }
+.pv-options li { font-size: 13px; color: #a99b7c; line-height: 1.6; }
+
+.pv-foot-note { margin: 8px 0 0; font-size: 11.5px; color: #7d7460; line-height: 1.6; }
+.pv-empty { color: #8a8066; text-align: center; padding: 40px 0; font-size: 13.5px; }
+
+.pv-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 20px; border-top: 1px solid #2a2618; background: #101219;
+  flex-wrap: wrap;
+}
+.pv-foot-left { font-size: 11.5px; color: #7d7460; }
+.pv-foot-actions { display: flex; align-items: center; gap: 10px; }
+.pv-hint { font-size: 11.5px; color: #7d9a80; }
+.pv-share {
+  padding: 7px 14px; border-radius: 9px; cursor: pointer; font-size: 12.5px;
+  color: #e5d5ae; background: rgba(201, 138, 92, 0.14);
+  border: 1px solid rgba(201, 138, 92, 0.38); transition: background 0.15s;
+}
+.pv-share:hover:not(:disabled) { background: rgba(201, 138, 92, 0.24); }
+.pv-share:disabled { opacity: 0.45; cursor: default; }
+
+.pv-link { padding: 0 20px 14px; }
+.pv-link-input {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 11.5px;
+  color: #9a927c; background: #0d0f16; border: 1px solid #2a2618; border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* 分享链接多半在手机上打开 */
+@media (max-width: 640px) {
+  .pv-scroll { padding: 12px 14px 6px; }
+  .pv-note { padding: 10px 12px; }
+  .pv-note-badge { position: static; display: inline-block; margin-bottom: 5px; transform: none; }
+  .pv-cast li { grid-template-columns: 54px 1fr; }
+  .pv-foot { padding: 10px 14px; }
+  .pv-link { padding: 0 14px 12px; }
+  .pv-timeline::before { display: none; }
+  .pv-time { width: 38px; }
+}
+
+/* ── 分享链接加载态 / 失效页 ── */
+.share-boot {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(1200px 600px at 50% -10%, #1b1d29 0%, #0b0d14 60%);
+  color: #d8cfb4; text-align: center; padding: 28px;
+}
+.share-boot p { margin: 0; font-size: 13.5px; color: #8a8066; }
+.share-boot-title { font-size: 18px !important; color: #e8d9ae !important; }
+.share-boot-hint { max-width: 400px; line-height: 1.75; }

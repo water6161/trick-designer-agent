@@ -16,6 +16,7 @@ import VersionHistory from './components/VersionHistory'
 import QualityCard from './components/QualityCard'
 import RulesCard from './components/RulesCard'
 import StatsPanel from './components/StatsPanel'
+import PlayerView from './components/PlayerView'
 import { MenuIcon } from './components/icons'
 import {
   deleteSession,
@@ -27,10 +28,13 @@ import {
   streamRetry,
 } from './lib/api'
 import { listShelf, removeFromShelf, saveToShelf, planTitle, type ShelfItem } from './lib/shelf'
+import { decodePacket, hasShareToken, readShareToken, type PlayerPacket } from './lib/share'
+import { parsePlanFromMarkdown } from './lib/parsePlan'
 import type {
   ChatMessage as ChatMessageType,
   DonePayload,
   MetaPayload,
+  PlanData,
   PlanRules,
   QualityScore,
   SessionItem,
@@ -41,7 +45,7 @@ function fmtMs(value?: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`
 }
 
-export default function App() {
+function MainApp() {
   const [sessions, setSessions] = useState<SessionItem[]>([])
   const [activeId, setActiveId] = useState<string>(() => newConversationId())
   const [messages, setMessages] = useState<ChatMessageType[]>([])
@@ -67,6 +71,8 @@ export default function App() {
   const [rules, setRules] = useState<PlanRules | null>(null)
   const [showStats, setShowStats] = useState(false)
   const [lastRun, setLastRun] = useState<DonePayload | null>(null)
+  const [showPlayer, setShowPlayer] = useState(false)
+  const [latestPlan, setLatestPlan] = useState<PlanData | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -118,6 +124,7 @@ export default function App() {
       setMessages(history)
       setQuality(null)
       setRules(null)
+      setLatestPlan(null)
       stickRef.current = true
     } catch (err) {
       if (seq !== historySeq.current) return
@@ -206,6 +213,8 @@ export default function App() {
       onMeta: (meta: MetaPayload) => {
         setQuality(meta.quality ?? null)
         setRules(meta.rules ?? null)
+        // 结构化方案优先；缺失时下面会用 Markdown 兜底解析
+        setLatestPlan(meta.plan ?? null)
       },
       onDone: (data: DonePayload) => setLastRun(data),
       onError: (msg: string) => setError(msg),
@@ -300,6 +309,7 @@ export default function App() {
     setMessages([])
     setQuality(null)
     setRules(null)
+    setLatestPlan(null)
     setLastRun(null)
     setInput('')
     setError('')
@@ -364,6 +374,12 @@ export default function App() {
     return { hasPlan: false, latestMarkdown: '' }
   }, [messages])
 
+  // 玩家本的数据源：结构化方案优先，extract 失败时用 Markdown 兜底解析
+  const playerPlan = useMemo<PlanData | null>(() => {
+    if (latestPlan) return latestPlan
+    return latestMarkdown ? parsePlanFromMarkdown(latestMarkdown) : null
+  }, [latestPlan, latestMarkdown])
+
   return (
     <div className="app">
       <Sidebar
@@ -406,6 +422,7 @@ export default function App() {
                     <button onClick={() => { setToolsOpen(false); setShowRoles(true) }}>🃏 角色速览卡</button>
                     <button onClick={() => { setToolsOpen(false); setShowRescue(true) }}>🆘 救场手册</button>
                     <button onClick={() => { setToolsOpen(false); setShowVersions(true) }}>🕰 版本历史</button>
+                    <button onClick={() => { setToolsOpen(false); setShowPlayer(true) }}>📖 玩家本（无剧透）</button>
                   </div>
                 )}
               </div>
@@ -464,6 +481,10 @@ export default function App() {
 
       {showRoles && hasPlan && (
         <RoleCards markdown={latestMarkdown} onClose={() => setShowRoles(false)} />
+      )}
+
+      {showPlayer && hasPlan && (
+        <PlayerView plan={playerPlan} onClose={() => setShowPlayer(false)} />
       )}
 
       {showStats && (
@@ -589,4 +610,48 @@ export default function App() {
       </main>
     </div>
   )
+}
+
+/**
+ * 入口分流：`#/s/<token>` 是分享链接，直接进玩家本只读页；其余情况照常进创作台。
+ * 分成两个组件而不是在 App 里 early return，是为了让 hooks 顺序与路由无关。
+ */
+export default function App() {
+  const initialHash = useRef(typeof location !== 'undefined' ? location.hash : '')
+  const shared = useRef(hasShareToken(initialHash.current))
+  const [packet, setPacket] = useState<PlayerPacket | null>(null)
+  const [ready, setReady] = useState(() => !shared.current)
+
+  useEffect(() => {
+    if (!shared.current) return
+    void (async () => {
+      const token = readShareToken(initialHash.current)
+      setPacket(await decodePacket(token))
+      setReady(true)
+    })()
+  }, [])
+
+  if (!ready) {
+    return (
+      <div className="share-boot">
+        <span className="loader" />
+        <p>正在打开分享的剧本…</p>
+      </div>
+    )
+  }
+
+  if (shared.current) {
+    if (packet) return <PlayerView packet={packet} />
+    return (
+      <div className="share-boot">
+        <p className="share-boot-title">这个链接打不开了</p>
+        <p className="share-boot-hint">
+          分享内容整段编码在链接里，被聊天软件截断或改写都会导致无法还原。请让分享者重新生成一次。
+        </p>
+        <a className="pv-home" href="./">去创作台</a>
+      </div>
+    )
+  }
+
+  return <MainApp />
 }
