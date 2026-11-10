@@ -31,6 +31,7 @@ export default function Composer({ value, onChange, onSend, onStop, streaming, d
       <div className={`composer-box ${streaming ? 'is-streaming' : ''}`}>
         <textarea
           ref={areaRef}
+          id="composer-input"
           className="composer-input"
           rows={1}
           value={value}

@@ -477,6 +477,38 @@ test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带�
     .toBe(1)
 })
 
+test('全局快捷键：/ 聚焦输入、g 序列开工具、? 速查卡、输入态让位', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  // / 聚焦输入框
+  await page.keyboard.press('g')
+  await page.keyboard.press('d')
+  const dmDialog = page.getByRole('dialog', { name: 'DM 主持台' })
+  await expect(dmDialog).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dmDialog).toHaveCount(0)
+
+  // ? 速查卡：键位表与实际行为同源
+  await page.keyboard.press('?')
+  const help = page.getByRole('dialog', { name: '快捷键速查' })
+  await expect(help).toBeVisible()
+  await expect(help.locator('.shortcut-row')).toHaveCount(6)
+  await page.keyboard.press('Escape')
+  await expect(help).toHaveCount(0)
+
+  // / 聚焦输入框：直接打字落在 textarea 上
+  await page.keyboard.press('/')
+  await page.keyboard.type('雪夜')
+  await expect(page.locator('textarea#composer-input')).toHaveValue(/雪夜$/)
+
+  // 输入态下 g d 不触发弹层（还给打字）
+  await page.keyboard.press('g')
+  await page.keyboard.press('d')
+  await expect(page.getByRole('dialog', { name: 'DM 主持台' })).toHaveCount(0)
+  await expect(page.locator('textarea#composer-input')).toHaveValue(/gd$/)
+})
+
 test('数据备份：书架一键导出 JSON，再从文件恢复回来', async ({ page }) => {
   // 移除走 window.confirm，Playwright 默认会 dismiss——这里显式接受
   page.on('dialog', (dialog) => void dialog.accept())

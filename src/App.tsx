@@ -25,6 +25,7 @@ const PlayerView = lazy(() => import('./components/PlayerView'))
 const Shelf = lazy(() => import('./components/Shelf'))
 const EndingTree = lazy(() => import('./components/EndingTree'))
 const AnnotationsPanel = lazy(() => import('./components/AnnotationsPanel'))
+const ShortcutHelp = lazy(() => import('./components/ShortcutHelp'))
 
 /** 弹层加载期间的占位：不遮罩、不闪屏，加载完成后直接出现 */
 function PanelFallback() {
@@ -63,6 +64,7 @@ import {
   type Annotation,
 } from './lib/annotations'
 import AnnotationPopover, { type SelectionTarget } from './components/AnnotationPopover'
+import { CHORD_WINDOW_MS, resolveShortcut } from './lib/shortcuts'
 import type {
   ChatMessage as ChatMessageType,
   DonePayload,
@@ -114,6 +116,7 @@ function MainApp() {
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [selTarget, setSelTarget] = useState<SelectionTarget | null>(null)
   const [showNotes, setShowNotes] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -122,6 +125,7 @@ function MainApp() {
   const stickRef = useRef(true)
   const historySeq = useRef(0)
   const lastAssistantLenRef = useRef(0)
+  const chordAtRef = useRef(0)
 
   const flushTokens = () => {
     const buffered = pendingRef.current
@@ -493,6 +497,7 @@ function MainApp() {
     window.setTimeout(() => el.classList.remove('note-flash'), 1800)
   }
 
+
   const removeSession = async (id: string) => {
     if (streaming && id === activeId) {
       setNotice('请先停止生成，再删除当前会话。')
@@ -521,7 +526,7 @@ function MainApp() {
   // Esc 的两层语义：有弹层时关弹层（键盘用户不必 Tab 到角落找关闭按钮），
   // 没弹层但正在生成时 = 停止生成（一次等三分钟，想中途叫停不该只能去点按钮）
   const anyPanelOpen =
-    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer || showEndings || showNotes
+    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer || showEndings || showNotes || showShortcuts
   useEffect(() => {
     if (!anyPanelOpen && !streaming && !selTarget) return
     const onKey = (event: KeyboardEvent) => {
@@ -538,6 +543,7 @@ function MainApp() {
         setShowPlayer(false)
         setShowEndings(false)
         setShowNotes(false)
+        setShowShortcuts(false)
         setSelTarget(null)
         return
       }
@@ -591,6 +597,50 @@ function MainApp() {
     if (latestPlan) return latestPlan
     return latestMarkdown ? parsePlanFromMarkdown(latestMarkdown) : null
   }, [latestPlan, latestMarkdown])
+
+  // ── 全局快捷键：/ 聚焦、g 前缀序列、? 速查 ──
+  const focusComposer = () => {
+    document.getElementById('composer-input')?.focus()
+  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowShortcuts(false)
+        return // 其余弹层/停止由既有 Esc 逻辑处理
+      }
+      const target = event.target as HTMLElement | null
+      const inField =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      const modifier = event.ctrlKey || event.metaKey || event.altKey
+      const now = Date.now()
+      const chord = now - chordAtRef.current < CHORD_WINDOW_MS
+      const action = resolveShortcut({
+        key: event.key,
+        inField,
+        modifier,
+        chord,
+        hasPlan,
+      })
+      if (action === 'none') {
+        // 记录 g 前缀（下一拍在此窗口内按 d/t/p 才生效）
+        if (event.key === 'g' && !inField && !modifier) chordAtRef.current = now
+        return
+      }
+      event.preventDefault()
+      chordAtRef.current = 0
+      if (action === 'focus-input') focusComposer()
+      if (action === 'help') setShowShortcuts(true)
+      if (action === 'dm') setShowDM(true)
+      if (action === 'timeline') setShowTimeline(true)
+      if (action === 'player') setShowPlayer(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [hasPlan])
 
   return (
     <div className="app">
@@ -749,6 +799,12 @@ function MainApp() {
 
       {selTarget && !streaming && (
         <AnnotationPopover target={selTarget} onSave={saveNote} onCancel={() => setSelTarget(null)} />
+      )}
+
+      {showShortcuts && (
+        <Suspense fallback={<PanelFallback />}>
+          <ShortcutHelp onClose={() => setShowShortcuts(false)} />
+        </Suspense>
       )}
 
       {showPlayer && hasPlan && (
