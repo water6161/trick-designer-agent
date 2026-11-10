@@ -24,6 +24,7 @@ const StatsPanel = lazy(() => import('./components/StatsPanel'))
 const PlayerView = lazy(() => import('./components/PlayerView'))
 const Shelf = lazy(() => import('./components/Shelf'))
 const EndingTree = lazy(() => import('./components/EndingTree'))
+const AnnotationsPanel = lazy(() => import('./components/AnnotationsPanel'))
 
 /** 弹层加载期间的占位：不遮罩、不闪屏，加载完成后直接出现 */
 function PanelFallback() {
@@ -55,6 +56,13 @@ import {
 import { listShelf, removeFromShelf, saveToShelf, planTitle, type ShelfItem } from './lib/shelf'
 import { decodePacket, hasShareToken, readShareToken, type PlayerPacket } from './lib/share'
 import { parsePlanFromMarkdown } from './lib/parsePlan'
+import {
+  addAnnotation,
+  listAnnotations,
+  removeAnnotation,
+  type Annotation,
+} from './lib/annotations'
+import AnnotationPopover, { type SelectionTarget } from './components/AnnotationPopover'
 import type {
   ChatMessage as ChatMessageType,
   DonePayload,
@@ -102,6 +110,10 @@ function MainApp() {
   const [showPlayer, setShowPlayer] = useState(false)
   const [showEndings, setShowEndings] = useState(false)
   const [latestPlan, setLatestPlan] = useState<PlanData | null>(null)
+  // 本地批注：划选正文 → 浮标 → 就地写一句，只存本机
+  const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [selTarget, setSelTarget] = useState<SelectionTarget | null>(null)
+  const [showNotes, setShowNotes] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const pendingRef = useRef('')
@@ -416,6 +428,71 @@ function MainApp() {
     setStreaming(false)
   }
 
+  // ── 本地批注 ──
+
+  // 切会话换一批批注；划选浮标也一并收起
+  useEffect(() => {
+    setAnnotations(listAnnotations(activeId))
+    setSelTarget(null)
+  }, [activeId])
+
+  // 划选正文松开鼠标：选区落在某条消息里才浮出「加批注」
+  const handleChatMouseUp = () => {
+    if (streaming) return
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return
+    const text = sel.toString().trim()
+    if (!text) return
+    const range = sel.getRangeAt(0)
+    const node =
+      range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+        ? range.commonAncestorContainer.parentElement
+        : (range.commonAncestorContainer as Element | null)
+    const messageId = node?.closest?.('.msg')?.getAttribute('data-mid')
+    if (!messageId) {
+      setSelTarget(null)
+      return
+    }
+    const rect = range.getBoundingClientRect()
+    setSelTarget({
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+      messageId,
+      // 锚点只要认得出开头，不需要整段
+      quote: text.slice(0, 240),
+    })
+  }
+
+  const saveNote = (note: string) => {
+    if (!selTarget) return
+    addAnnotation({
+      conversationId: activeId,
+      messageId: selTarget.messageId,
+      quote: selTarget.quote,
+      note,
+    })
+    setAnnotations(listAnnotations(activeId))
+    window.getSelection()?.removeAllRanges()
+    setSelTarget(null)
+  }
+
+  const removeNote = (id: string) => {
+    removeAnnotation(id)
+    setAnnotations(listAnnotations(activeId))
+  }
+
+  const jumpToNote = (messageId: string) => {
+    setShowNotes(false)
+    const el = document.querySelector(`[data-mid="${CSS.escape(messageId)}"]`)
+    if (!el) {
+      setNotice('这条批注挂在历史消息上，当前对话里没有原文。')
+      return
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('note-flash')
+    window.setTimeout(() => el.classList.remove('note-flash'), 1800)
+  }
+
   const removeSession = async (id: string) => {
     if (streaming && id === activeId) {
       setNotice('请先停止生成，再删除当前会话。')
@@ -444,9 +521,9 @@ function MainApp() {
   // Esc 的两层语义：有弹层时关弹层（键盘用户不必 Tab 到角落找关闭按钮），
   // 没弹层但正在生成时 = 停止生成（一次等三分钟，想中途叫停不该只能去点按钮）
   const anyPanelOpen =
-    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer || showEndings
+    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer || showEndings || showNotes
   useEffect(() => {
-    if (!anyPanelOpen && !streaming) return
+    if (!anyPanelOpen && !streaming && !selTarget) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (anyPanelOpen) {
@@ -460,6 +537,13 @@ function MainApp() {
         setShowStats(false)
         setShowPlayer(false)
         setShowEndings(false)
+        setShowNotes(false)
+        setSelTarget(null)
+        return
+      }
+      // 批注浮标也归 Esc 管
+      if (selTarget) {
+        setSelTarget(null)
         return
       }
       if (streaming) {
@@ -471,7 +555,7 @@ function MainApp() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [anyPanelOpen, streaming, activeId])
+  }, [anyPanelOpen, streaming, activeId, selTarget])
 
   // 生成中关页面/刷新等于白等，给浏览器一次确认机会
   useEffect(() => {
@@ -568,6 +652,15 @@ function MainApp() {
               </div>
             </>
           )}
+          {messages.length > 0 && !streaming && (
+            <button
+              className="immersive-btn notes-btn"
+              onClick={() => setShowNotes(true)}
+              title="本地批注：在正文里划选一段文字随手记"
+            >
+              📝{annotations.length > 0 ? ` ${annotations.length}` : ''}
+            </button>
+          )}
           <button
             className="immersive-btn stats-btn"
             onClick={() => setShowStats(true)}
@@ -643,6 +736,21 @@ function MainApp() {
         </Suspense>
       )}
 
+      {showNotes && (
+        <Suspense fallback={<PanelFallback />}>
+          <AnnotationsPanel
+            items={annotations}
+            onClose={() => setShowNotes(false)}
+            onRemove={removeNote}
+            onJump={jumpToNote}
+          />
+        </Suspense>
+      )}
+
+      {selTarget && !streaming && (
+        <AnnotationPopover target={selTarget} onSave={saveNote} onCancel={() => setSelTarget(null)} />
+      )}
+
       {showPlayer && hasPlan && (
         <Suspense fallback={<PanelFallback />}>
           <PlayerView plan={playerPlan} onClose={() => setShowPlayer(false)} />
@@ -691,7 +799,7 @@ function MainApp() {
           />
         )}
 
-        <div className="chat-scroll" ref={scrollRef} onScroll={() => {
+        <div className="chat-scroll" ref={scrollRef} onMouseUp={handleChatMouseUp} onScroll={() => {
           const container = scrollRef.current
           if (!container) return
           stickRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 140
@@ -713,6 +821,8 @@ function MainApp() {
                     key={message.id}
                     message={message}
                     streaming={streaming && index === messages.length - 1}
+                    annotations={annotations.filter((item) => item.messageId === message.id)}
+                    onRemoveNote={removeNote}
                   />
                 ))}
                 {quality && !streaming && <QualityCard score={quality} />}

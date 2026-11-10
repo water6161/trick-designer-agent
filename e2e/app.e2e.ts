@@ -476,6 +476,65 @@ test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带�
     .toBe(1)
 })
 
+test('本地批注：划选正文加批注，清单回跳与删除，只存本机', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  // 划选正文第一段，浮出「加批注」
+  await page.evaluate(() => {
+    // 找「案件速览」那段正文：块引用里的 p 会被先匹配到，按内容挑
+    const paragraphs = Array.from(document.querySelectorAll('.msg-assistant .markdown p'))
+    const paragraph = paragraphs.find((el) => el.textContent?.includes('暴雪封山第四天'))
+    if (!paragraph) throw new Error('没有找到可划选的正文')
+    const range = document.createRange()
+    range.selectNodeContents(paragraph as Node)
+    const sel = window.getSelection()
+    sel?.removeAllRanges()
+    sel?.addRange(range)
+  })
+  await page.locator('.chat-scroll').dispatchEvent('mouseup')
+
+  const popBtn = page.locator('.annot-pop-btn')
+  await expect(popBtn).toBeVisible()
+  await popBtn.click()
+
+  const editor = page.locator('.annot-pop-editor')
+  await expect(editor).toBeVisible()
+  await editor.locator('textarea').fill('这句伏笔再补一笔：怀表是谁调的')
+  await editor.getByRole('button', { name: '保存批注' }).click()
+
+  // 批注挂到消息下，📝 按钮带上数量徽标
+  await expect(page.locator('.msg-annotations .annot-item')).toHaveCount(1)
+  await expect(page.locator('.annot-item')).toContainText('怀表是谁调的')
+  await expect(page.getByRole('button', { name: '📝 1' })).toBeVisible()
+
+  // 清单：复制全部 → 回跳原文 → 删除
+  await page.getByRole('button', { name: '📝 1' }).click()
+  const panel = page.getByRole('dialog', { name: '批注清单' })
+  await expect(panel).toBeVisible()
+
+  await panel.getByRole('button', { name: '⧉ 复制全部' }).click()
+  await expect(panel.locator('.notes-flash')).toContainText('已复制')
+
+  const quote = panel.locator('.notes-quote')
+  await expect(quote).toContainText('暴雪封山第四天')
+  await quote.click()
+
+  // 面板关闭并瞬时高亮消息
+  await expect(panel).toHaveCount(0)
+  await expect(page.locator('.note-flash').first()).toBeVisible()
+
+  // 删除后回到空态，徽标消失
+  await page.getByRole('button', { name: '📝 1' }).click()
+  await panel.getByRole('button', { name: '删除批注' }).click()
+  await expect(panel.locator('.notes-empty')).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  await expect(page.locator('.msg-annotations')).toHaveCount(0)
+  // 入口仍在（有消息就能加批注），但数量徽标消失了
+  await expect(page.getByRole('button', { name: '📝', exact: true })).toHaveCount(1)
+})
+
 test('会话列表：搜索过滤 + 删除需要点两次', async ({ page }) => {
   const today = new Date().toISOString()
   // 单独覆盖会话列表，不影响其他用例的 mock
