@@ -476,6 +476,40 @@ test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带�
     .toBe(1)
 })
 
+test('案件重演：逐帧回放时间线，线索联动，终幕落真相', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🔗 证据链时间线' }).click()
+  const dialog = page.getByRole('dialog', { name: '证据链时间线' })
+  await expect(dialog).toBeVisible()
+
+  await dialog.getByRole('button', { name: '▶ 重演案件' }).click()
+
+  // 第一帧：mock 时间线里唯一的事件，关联线索联动出现
+  const frame = dialog.locator('.replay-frame')
+  await expect(frame).toContainText('21:40')
+  await expect(frame).toContainText('书房传出倒地声')
+  await expect(frame).toContainText('周慈')
+
+  // 步进到终幕：真相帧
+  await dialog.getByRole('button', { name: '下一帧 →' }).click()
+  const truth = dialog.locator('.replay-truth')
+  await expect(truth).toContainText('凶手是白棠')
+  await expect(truth).toContainText('她才是真正的继承人')
+  // 最后一帧时「下一帧」禁用，播放键变重播
+  await expect(dialog.getByRole('button', { name: '下一帧 →' })).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: '↺ 重播' })).toBeVisible()
+
+  // 进度点可跳回事件帧
+  await dialog.locator('.replay-dot').first().click()
+  await expect(frame).toContainText('书房传出倒地声')
+
+  await dialog.getByRole('button', { name: '退出重演' }).click()
+  await expect(dialog.locator('.timeline')).toBeVisible()
+})
+
 test('本地批注：划选正文加批注，清单回跳与删除，只存本机', async ({ page }) => {
   await generatePlan(page)
   await expect(page.locator('.quality-card')).toBeVisible()

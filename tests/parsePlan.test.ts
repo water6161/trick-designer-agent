@@ -93,6 +93,27 @@ describe('parsePlanFromMarkdown', () => {
     expect(String((plan.culprit as { motive?: string }).motive)).toContain('三年前')
   })
 
+  it('动机是干净的句子，不带「凶手：」前缀的稿中稿', () => {
+    const motive = String((plan.culprit as { motive?: string }).motive)
+    expect(motive).not.toContain('凶手：')
+    expect(motive).not.toContain('动机：')
+    expect(motive).toBe('三年前父亲的案子被死者误判，家破人亡。')
+  })
+
+  it('没有「动机：」行时退化为小节纯文本（换行折叠），也不带行前缀', () => {
+    const md = `## 四、凶手与人物逻辑
+
+### 凶手
+
+凶手：沈墨
+管家偷换了遗嘱
+`
+    const parsed = parsePlanFromMarkdown(md)
+    const motive = String((parsed.culprit as { motive?: string }).motive)
+    expect(motive).toContain('管家偷换了遗嘱')
+    expect(motive).not.toContain('\n')
+  })
+
   it('解析角色表（表头多候选键名）', () => {
     expect(plan.characters).toHaveLength(2)
     expect(plan.characters?.[0]).toMatchObject({

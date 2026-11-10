@@ -99,9 +99,14 @@ export function parsePlanFromMarkdown(md: string): PlanData {
   const culpritText = culpritSection || md
   const nameMatch = culpritText.match(/凶手[：:]\s*([^\n，,（(。]{2,12})/)
   if (nameMatch) {
+    // 动机单独提取「动机：」行——直接塞原文会把「凶手：xxx」前缀一起带出去，
+    // DM 朗读真相时会念出「凶手：白棠 动机：……」这种稿中稿
+    const motiveMatch = culpritText.match(/动机[：:]\s*([^\n]+)/)
     plan.culprit = {
       character: nameMatch[1].trim(),
-      motive: culpritText.slice(0, 400),
+      motive: motiveMatch
+        ? motiveMatch[1].trim()
+        : culpritText.replace(/\s*\n+\s*/g, ' ').slice(0, 200),
     }
   }
 

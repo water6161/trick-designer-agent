@@ -3782,3 +3782,53 @@ button:disabled,
   margin: auto 18px 14px; padding-top: 10px; border-top: 1px solid #1d2331;
   font-size: 11px; line-height: 1.6; color: #5d6577;
 }
+
+/* ── 案件重演：时间线的回放模式 ── */
+.tl-replay-btn {
+  padding: 5px 11px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+  color: #d8cfb4; background: #1d2130; border: 1px solid #3a3320; border-radius: 8px;
+}
+.tl-replay-btn:hover { background: rgba(176, 154, 85, 0.2); color: #e8d9ae; }
+
+.replay-root { padding: 10px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+.replay-bar { display: flex; gap: 7px; justify-content: center; padding: 4px 0; }
+.replay-dot {
+  width: 11px; height: 11px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: #262d3a; border: 1px solid #3a4152;
+}
+.replay-dot.seen { background: #4a4130; border-color: #6b5c35; }
+.replay-dot.now { background: #b09a55; border-color: #e8d9ae; box-shadow: 0 0 8px rgba(176, 154, 85, 0.6); }
+.replay-dot.truth { border-radius: 3px; }
+.replay-dot.truth.now { background: #c96a6a; border-color: #e0a0a0; box-shadow: 0 0 8px rgba(201, 106, 106, 0.6); }
+
+.replay-frame {
+  min-height: 180px; padding: 18px 20px;
+  background: #151824; border: 1px solid #2c3344; border-radius: 12px;
+  animation: replay-in 0.45s ease-out both;
+}
+@keyframes replay-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.replay-time { margin: 0; font-size: 13px; letter-spacing: 0.14em; color: #b09a55; font-variant-numeric: tabular-nums; }
+.replay-event { margin: 8px 0 0; font-size: 21px; font-weight: 700; line-height: 1.5; color: var(--text); }
+.replay-witness { margin: 8px 0 0; font-size: 13px; color: #9aa3b8; }
+.replay-frame .tl-badge { display: inline-block; margin-top: 10px; }
+.replay-clues { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #2c3344; }
+.replay-clues .tl-clues li { background: #12151d; }
+
+.replay-truth { border-color: #4a2a2a; background: #1d1414; text-align: center; }
+.replay-truth-label { margin: 0; font-size: 11px; letter-spacing: 0.4em; color: #b08a8a; }
+.replay-truth .replay-event { color: #e0a0a0; }
+.replay-motive { margin: 10px 0 0; font-size: 14px; line-height: 1.7; color: #c3a8a8; }
+
+.replay-controls { display: flex; gap: 8px; justify-content: center; }
+.replay-controls button {
+  padding: 7px 14px; font-size: 13px; font-family: inherit; cursor: pointer;
+  color: #d8cfb4; background: #1d2130; border: 1px solid #2c3344; border-radius: 8px;
+}
+.replay-controls button:hover:not(:disabled) { border-color: #b09a55; color: #e8d9ae; }
+.replay-controls button:disabled { opacity: 0.35; cursor: default; }
+.replay-controls .replay-play { color: #171a26; background: #b09a55; border-color: #b09a55; font-weight: 600; }
+.replay-controls .replay-play:hover { color: #171a26; }
+.replay-controls .replay-exit { color: #9aa3b8; }
