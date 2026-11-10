@@ -342,6 +342,14 @@ async def research(
     state: AgentState, config: RunnableConfig, *, search_tool: Any = None, env: EnvConfig | None = None
 ) -> dict[str, Any]:
     writer = get_stream_writer()
+
+    # 极速模式：联网检索要多轮网络往返，是「出骨架」路径上最不值的一段开销。
+    # 骨架阶段本来就只要主线，套路纠偏留给正式模式。
+    if _speed_mode(state):
+        writer({"event": "status", "stage": "research", "label": "极速模式：跳过联网检索"})
+        writer({"event": "notice", "message": "极速模式已跳过联网检索，直接给骨架；需要套路校验请关闭极速模式重新生成。"})
+        return {"research": []}
+
     writer({"event": "status", "stage": "research", "label": "正在检索经典诡计与玩家雷点"})
 
     brief = state.get("brief") or {}
@@ -526,6 +534,18 @@ async def _stream_part(
     return f"## 待补充：{part['title']}\n（本节生成超时，请回复「补写 {part['no']}」让我补上。）"
 
 
+# 极速模式专用：整份骨架一次写完。
+# 分段的本意是「边写边看 + 避免单段超时」，但每段都要重发整份 payload
+# （知识库/research/上一版正文），三次 prefill 是这条链路上最贵的固定开销；
+# 骨架本身只有千把字，一次出完反而更快。
+QUICK_PART = {
+    "no": 0,
+    "title": "骨架",
+    "ask": "现在一次性写完整份骨架方案（含全部 7 节），不要分段提示，不要写开场白或收尾解释。",
+    "label": "正在快速搭建骨架",
+}
+
+
 async def design(
     state: AgentState, config: RunnableConfig, *, env: EnvConfig | None
 ) -> dict[str, Any]:
@@ -542,7 +562,7 @@ async def design(
     payload = {
         "需求": brief,
         "本轮改动": brief.get("modifications") or [],
-        "本地知识库参考（可引用思路但不要照抄）": retrieve_knowledge(brief),
+        "本地知识库参考（可引用思路但不要照抄）": None if speed else retrieve_knowledge(brief),
         "历史已用诡计（本次务必避开这些套路角度，除非用户点名）": dedup.build_avoidance_hint(
             brief, state.get("used_tricks") or []
         )
@@ -552,14 +572,28 @@ async def design(
             {"title": item.get("title"), "snippet": item.get("snippet"), "href": item.get("href")}
             for item in research[:10]
         ],
-        "上一版方案相关段落（迭代时在它基础上修改，为空表示全新创作）": previous_markdown[:6000] or None,
+        "上一版方案相关段落（迭代时在它基础上修改，为空表示全新创作）": (
+            previous_markdown[:2000] if speed else previous_markdown[:6000]
+        )
+        or None,
         "用户对追问的回答（追问器上轮提的问题）": brief.get("answers") or None,
         "用户选择的方向（多方案对比后的选择）": brief.get("compare_pick") or None,
         "本轮用户原话": _last_user_text(state),
         "输出基调": (
-            "【极速模式·大框架】只出骨架，不铺陈：速览表只 1 行；背景 2 句；手法拆解 3 步每步一句话；"
-            "角色 4 人每格一句话；公开线索 3 条、深入线索 2 条（每条一句话）；时间线 3 条；"
-            "公平性自查 3 句话；DM 提示 3 条；防杠 2 条；可迭代 2 条；互动剧情只写 1 个节点（2 个选项），隐藏真结局省略。"
+            "【极速模式·骨架】一次写完，全文控制在 900 字以内，只写下面 7 节，其他章节一律不写：\n"
+            "1.「# 《标题》」+ 一行「> 卖点」\n"
+            "2.「## 一、案件速览」：一张表，只 1 行数据（题材/人数/难度/诡计类型）\n"
+            "3.「## 二、死者与案发背景」：2 句话（死者身份、现场状态）\n"
+            "4.「## 三、核心诡计」：先「### 手法拆解」写 3 步有序列表（每步一句话），"
+            "末尾 1 句现实不可复刻说明\n"
+            "5.「## 四、凶手与人物逻辑」：先写「### 凶手」小标题，凶手/动机/机会/手法 各 1 句；"
+            "再写「### 角色表」小标题，4 人表格（角色/身份/秘密/被怀疑点/外形锚点），"
+            "外形锚点写发型发色或服装主色，10 字内\n"
+            "6.「## 五、线索清单」：先「### 公开线索」3 条，再「### 深入线索」2 条，"
+            "表格列固定为「编号/线索/指向或排除/获取方式」\n"
+            "7.「## 六、时间线」：3 条，表格列「时间/事件/可验证方式」；其中至少 1 条必须是凶手的行动，"
+            "另 1 条必须是死者死亡时间（这两点决定玩家能不能自己验证）\n"
+            "不要写：结局分支、隐藏真结局、公平性自查、DM 提示、防杠、可迭代方向、沉浸互动剧情。"
             if speed
             else "内容完整：公开线索6~8条、深入线索5~6条、时间线5条左右、角色5~6人。"
         ),
@@ -601,7 +635,8 @@ async def design(
 
     chunks: list[str] = []
     # 全局预算：给 extract 与成稿留出 ≥80s，避免三段都慢时撞平台 300s 硬上限
-    deadline = asyncio.get_running_loop().time() + (195 if not speed else 165)
+    # 极速模式只跑一段，预算收到 95s——超了就该降级/重试，而不是继续等
+    deadline = asyncio.get_running_loop().time() + (195 if not speed else 95)
 
     # 单段重写：用户说「重写第二部分 / 只改第三章」时，只重跑对应那一段，其余章节原样保留
     only = _rewrite_part_index(state, previous_markdown)
@@ -620,6 +655,23 @@ async def design(
         writer({"event": "status", "stage": "designed", "label": f"第 {part['no']} 部分已重写"})
         return {"design_markdown": merged}
 
+    if speed:
+        # 极速模式：一次调用出完整骨架（正文短，合并不吃亏；省下两次 prefill）
+        writer({"event": "status", "stage": "design", "label": QUICK_PART["label"]})
+        text = await _stream_part(
+            model,
+            base_payload,
+            QUICK_PART,
+            writer,
+            timeouts=[80, 50],
+            deadline=deadline,
+        )
+        markdown = text.strip()
+        if len(markdown) < 150:
+            raise RuntimeError("方案正文过短，模型可能未正常输出，请重试。")
+        writer({"event": "status", "stage": "designed", "label": "骨架已完成"})
+        return {"design_markdown": markdown}
+
     for part in DESIGN_PARTS:
         writer({"event": "status", "stage": "design", "label": part["label"]})
         text = await _stream_part(
@@ -627,7 +679,7 @@ async def design(
             base_payload,
             part,
             writer,
-            timeouts=[115, 85] if not speed else [95, 70],
+            timeouts=[115, 85],
             deadline=deadline,
         )
         chunks.append(text)

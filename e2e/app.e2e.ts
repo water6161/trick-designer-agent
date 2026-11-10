@@ -555,6 +555,32 @@ test('全局快捷键：/ 聚焦输入、g 序列开工具、? 速查卡、输�
   await expect(page.locator('textarea#composer-input')).toHaveValue(/gd$/)
 })
 
+test('极速模式：开关打开后，发出去的需求带骨架指令而不是「完整方案」', async ({ page }) => {
+  await mockAgent(page)
+  const chatBodies: string[] = []
+  page.on('request', (request) => {
+    const body = request.postData() || ''
+    if (request.url().includes('trick-designer') && body.includes('"chat"')) chatBodies.push(body)
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: /需求构造器/ }).click()
+  const panel = page.locator('.req-panel')
+  await expect(panel).toBeVisible()
+  await panel.locator('.req-chip').filter({ hasText: '本格' }).first().click()
+
+  await page.getByRole('button', { name: /极速模式/ }).click()
+  await expect(page.getByRole('button', { name: /极速模式 开/ })).toBeVisible()
+
+  await page.getByRole('button', { name: /生成方案/ }).click()
+
+  // 极速模式要真的把「骨架」这条指令发出去，否则后端拿不到标记
+  await expect.poll(() => chatBodies.length).toBeGreaterThan(0)
+  expect(chatBodies[0]).toContain('【极速模式】')
+  expect(chatBodies[0]).toContain('骨架')
+  expect(chatBodies[0]).not.toContain('请给一套完整方案')
+})
+
 test('数据备份：书架一键导出 JSON，再从文件恢复回来', async ({ page }) => {
   // 移除走 window.confirm，Playwright 默认会 dismiss——这里显式接受
   page.on('dialog', (dialog) => void dialog.accept())

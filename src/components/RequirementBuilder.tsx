@@ -181,7 +181,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
               className={`req-chip ${state.speed ? 'active' : ''}`}
               onClick={() => setState((prev) => ({ ...prev, speed: !prev.speed }))}
               disabled={disabled}
-              title="精简输出模式：约 1 分钟出全套方案（含自查），线索与角色数量精简；关闭则完整详版约 3 分钟"
+              title="极速模式：跳过联网检索、一次生成骨架，约 30 秒出主线 7 节（标题/速览/背景/诡计/凶手/线索/时间线）；需要自查与分支结局请关闭"
             >
               ⚡ 极速模式 {state.speed ? '开' : '关'}
             </button>
@@ -190,7 +190,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
               className="req-generate"
               disabled={!canBuild || disabled}
               onClick={() => {
-                onSend(`${message}。请给一套完整方案。`)
+                onSend(state.speed ? `${message}。请先给一套骨架方案，只写主线。` : `${message}。请给一套完整方案。`)
                 setOpen(false)
               }}
             >
