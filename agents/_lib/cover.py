@@ -7,7 +7,8 @@
 - 主角形象来自角色表「外形锚点」（年龄/发型发色/体型/服装主色/标志物）
 - 道具来自线索表里的真实道具名（不再是写死的怀表）
 - 场景来自死者现场的描述
-- seed 由 标题+风格 哈希决定：不同剧本必出不同图，同剧本同风格稳定复现
+- seed 与构图变体由 nonce 决定：每次生成都换一张（后端缺省给随机 nonce），
+  传同一个 nonce 可复现同一张图
 """
 
 from __future__ import annotations
@@ -31,6 +32,45 @@ _ABSTRACT_CLUE_WORDS = (
 )
 
 _MAX_SEED = 2**31 - 1
+
+# ───────────────────────── 构图变体池 ─────────────────────────
+# 单一机位/光源/色调 = 每张图都长一个样。这里每个维度给几套，
+# 由 nonce 决定取哪套，保证「换一张」时构图真的会变。
+
+_HERO_SHOTS = (
+    "半身特写占据画面右侧三分之二，侧身回望镜头，眼神沉静而锐利",
+    "近景胸像居中偏左，正面对镜头微抬下巴，目光越过观者",
+    "三分之二身位于画面左侧，侧脸望向画外光源，神情疏离",
+    "全身立于画面中央偏右，背对镜头回头看向观者，衣摆带风",
+    "过肩视角，主角位于前景右下角侧脸出画，视线投向画面深处",
+    "大特写只取眉眼与半张脸，其余部分没入黑暗",
+)
+
+_LIGHTS = (
+    "单一冷光从左上方打在脸侧，另半边脸沉入阴影",
+    "右侧一盏暖色烛光照亮半张脸，另一侧陷进深影",
+    "顶部天窗硬光垂直落下，眼窝与颧骨留下锐利阴影",
+    "背后逆光勾出人物轮廓，正面只剩微弱的反射光",
+)
+
+_TONES = (
+    "胶片颗粒质感，褪色色调",
+    "冷凝青蓝色调，高对比",
+    "暖褐复古色调，轻雾感",
+    "高反差黑白摄影质感",
+)
+
+_GROUP_SHOTS = (
+    "昏暗长桌旁围坐{count}人，各怀心思互不对视",
+    "俯拍视角，{count}人沿长桌两侧落座，桌面烛台居中",
+    "低角度平视，{count}人分列长桌两端，中央的空椅子格外扎眼",
+)
+
+_SCENE_SHOTS = (
+    "广角俯视整个空间，陈设与痕迹一览无余",
+    "低角度仰视，前景留一处关键物件做引导",
+    "透过半开的门缝向内窥视，画面边缘被门框压暗",
+)
 
 
 def _fnv1a(text: str) -> int:
@@ -97,6 +137,15 @@ def _players_count(brief: dict[str, Any], plan: dict[str, Any]) -> int:
     return 5
 
 
+def _pick(pool: tuple[str, ...], nonce: str, shift: int = 0) -> str:
+    """按 nonce 从变体池取一套：同一 nonce 恒定，不同 nonce 分散。
+
+    三个维度从同一个哈希的不同位段取值（而不是各自再哈希一次）——
+    独立哈希容易在取模时撞车，出现「机位和光源同时相同」的假重复。
+    """
+    return pool[(_fnv1a(nonce) >> shift) % len(pool)]
+
+
 def _era_part(brief: dict[str, Any]) -> str:
     era = str(brief.get("era") or brief.get("background") or "").strip()
     # brief.background 可能是整段设定，只取短句防 prompt 被灌爆
@@ -110,8 +159,12 @@ def build_cover_prompt(
     title: str,
     brief: dict[str, Any] | None,
     plan: dict[str, Any] | None,
+    nonce: str = "",
 ) -> dict[str, Any]:
-    """构建生图请求参数。返回 prompt / negative / seed / model / size。
+    """构建生图请求参数。返回 prompt / negative / seed / model / size / nonce。
+
+    nonce 决定 seed 与构图变体：每次生成传不同 nonce 就是「换一张」，
+    传相同 nonce 可复现同一张。缺省空串时退化为「按标题固定」。
 
     plan/brief 缺字段时逐项优雅退化，不抛错——封面生成永远不该因为
     方案解析不全而失败。
@@ -126,11 +179,13 @@ def build_cover_prompt(
         count = _players_count(brief, plan)
         scene = pick_scene(plan)
         scene_part = f"，{scene}" if scene else ""
+        shot = _pick(_GROUP_SHOTS, nonce, 0).format(count=count)
+        light = _pick(_LIGHTS, nonce, 3)
+        tone = _pick(_TONES, nonce, 6)
         prompt = (
-            f"电影级剧照，{genre_part}{era_part}悬疑群像，昏暗长桌旁围坐{count}人，"
+            f"电影级剧照，{genre_part}{era_part}悬疑群像，{shot}，"
             f"{count}人年龄性别身份各不相同、服装贴合时代背景{scene_part}，"
-            "各怀心思互不对视，烛光单一光源从桌面升起照亮各人面部，"
-            "背景深色木墙与阴影，胶片颗粒，褪色色调，强烈明暗对比，"
+            f"{light}，背景深色木墙与阴影，{tone}，强烈明暗对比，"
             "摄影级画质，画面留有顶部标题空间，画面中无任何文字水印"
         )
         model = "wan2.5-t2i-preview"
@@ -138,9 +193,12 @@ def build_cover_prompt(
     elif style == "scene":
         scene = pick_scene(plan)
         scene_part = f"，画面核心场景：{scene}" if scene else ""
+        shot = _pick(_SCENE_SHOTS, nonce, 0)
+        light = _pick(_LIGHTS, nonce, 3)
+        tone = _pick(_TONES, nonce, 6)
         prompt = (
             f"剧本杀游戏封面插画，{genre_part}{era_part}，悬疑惊悚氛围{scene_part}，"
-            "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
+            f"{shot}，{light}，{tone}，电影级光影，细节丰富，"
             "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
         )
         model = "wanx2.1-t2i-turbo"
@@ -158,13 +216,16 @@ def build_cover_prompt(
         prop_desc = f"手中握着关键道具（{prop}）" if prop else "手中握着一件贴合剧情的关键道具"
         scene = pick_scene(plan)
         scene_desc = f"背景是虚化的{scene}" if scene else "背景是虚化的室内环境与暗色帷幔"
+        shot = _pick(_HERO_SHOTS, nonce, 0)
+        light = _pick(_LIGHTS, nonce, 3)
+        tone = _pick(_TONES, nonce, 6)
         prompt = (
             f"电影级剧本杀海报，{genre_part}{era_part}悬疑剧照风格，"
-            f"{hero_desc}，半身特写占据画面右侧三分之二，侧身回望镜头，眼神沉静而锐利，"
+            f"{hero_desc}，{shot}，"
             f"{prop_desc}，"
-            "单一冷光从左上方打在脸侧，另半边脸沉入阴影，"
+            f"{light}，"
             f"{scene_desc}，强烈明暗对比，"
-            "胶片颗粒质感，褪色色调，画面留有干净的标题区，"
+            f"{tone}，画面留有干净的标题区，"
             "高度写实，摄影级画质，画面中无任何文字水印"
         )
         model = "wan2.5-t2i-preview"
@@ -174,6 +235,13 @@ def build_cover_prompt(
         "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形, 多余手指, 面部扭曲, 脸部畸形, 五官错位"
         + (", 卡通, 动漫, 二次元, 平面插画, 拼贴, 分格" if style != "scene" else "")
     )
-    # seed 由标题+风格决定：换剧本必换图；同剧本同风格可复现
-    seed = _fnv1a(f"{title}|{style}") % _MAX_SEED
-    return {"prompt": prompt, "negative": negative, "seed": seed, "model": model, "size": size}
+    # seed 由 标题+风格+nonce 决定：换剧本必换图，换 nonce 也换图，同 nonce 可复现
+    seed = _fnv1a(f"{title}|{style}|{nonce}") % _MAX_SEED
+    return {
+        "prompt": prompt,
+        "negative": negative,
+        "seed": seed,
+        "model": model,
+        "size": size,
+        "nonce": nonce,
+    }

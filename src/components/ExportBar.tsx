@@ -54,9 +54,10 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     try {
       const plan = await exportPlan(conversationId)
       await task(plan)
-      setMessage('完成')
+      // 每次点都是新图，明确告诉用户还能继续点
+      setMessage('已生成 · 再点一次换一张')
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : '导出失败，请重试。')
+      setMessage(err instanceof Error ? err.message : '生成失败，请重试。')
     } finally {
       setBusy(false)
       setTimeout(() => setMessage(''), 6000)
@@ -124,7 +125,9 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
               setMoreOpen(false)
               void runCover(async (plan) => {
                 const style = AI_COVER_STYLES[aiIdx].key
-                const { image } = await aiCover(conversationId, style)
+                // 每次点都是新构图：nonce 变 → 后端 seed 与机位/光源/色调一起变
+                const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+                const { image } = await aiCover(conversationId, style, nonce)
                 downloadAICoverPNG(image, {
                   title: plan.title,
                   genre: plan.brief?.genre,

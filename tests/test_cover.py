@@ -72,19 +72,21 @@ def test_seed_不同剧本必不同_同剧本稳定() -> None:
 
 
 def test_group_人数来自方案不写死五人() -> None:
-    spec = build_cover_prompt("group", "雪落无声的第七夜", BRIEF, PLAN)
-    assert "围坐6人" in spec["prompt"]
-    assert "五人" not in spec["prompt"]
-    assert "反锁的书房" in spec["prompt"]
+    # 机位会随 nonce 轮换，但无论哪种句式都必须用方案里的实际人数
+    for nonce in ("", "n1", "n2", "n3"):
+        spec = build_cover_prompt("group", "雪落无声的第七夜", BRIEF, PLAN, nonce=nonce)
+        assert "6人" in spec["prompt"]
+        assert "五人" not in spec["prompt"]
+        assert "反锁的书房" in spec["prompt"]
 
 
 def test_group_人数上限收在3到8() -> None:
     plan = {"characters": [{"name": f"角色{i}"} for i in range(12)]}
     spec = build_cover_prompt("group", "某本", {}, plan)
-    assert "围坐8人" in spec["prompt"]
+    assert "8人" in spec["prompt"]
     brief = {"players": "2人"}
     spec2 = build_cover_prompt("group", "某本", brief, {})
-    assert "围坐3人" in spec2["prompt"]
+    assert "3人" in spec2["prompt"]
 
 
 def test_scene_prompt_不含标题文字_防止模型画字() -> None:
@@ -125,3 +127,37 @@ def test_pick_scene_现场优先_背景退路去掉行首标签() -> None:
     assert pick_scene(PLAN) == "反锁的书房，壁炉将熄"
     assert pick_scene({"background": "背景：暴雪封山的云顶山庄"}) == "暴雪封山的云顶山庄"
     assert pick_scene({}) == ""
+
+
+# ── 「换一张」：nonce 决定 seed 与构图 ──
+
+
+def test_换_nonce_就换图_同_nonce_可复现() -> None:
+    a = build_cover_prompt("character", "雪落无声的第七夜", BRIEF, PLAN, nonce="x1")
+    b = build_cover_prompt("character", "雪落无声的第七夜", BRIEF, PLAN, nonce="x2")
+    c = build_cover_prompt("character", "雪落无声的第七夜", BRIEF, PLAN, nonce="x1")
+    assert a["seed"] != b["seed"]
+    assert a["prompt"] != b["prompt"]
+    assert a["seed"] == c["seed"]
+    assert a["prompt"] == c["prompt"]
+    assert a["nonce"] == "x1"
+
+
+def test_连续六次生成_构图组合全不重复() -> None:
+    """同一剧本连点「换一张」，机位/光源/色调不应反复回到同一套。"""
+    seen = set()
+    for i in range(6):
+        spec = build_cover_prompt("character", "雪落无声的第七夜", BRIEF, PLAN, nonce=f"n{i}")
+        prompt = spec["prompt"]
+        shot = next(x for x in ("右侧三分之二", "居中偏左", "画面左侧", "背对镜头回头", "过肩视角", "大特写") if x in prompt)
+        light = next(x for x in ("左上方", "暖色烛光", "天窗硬光", "背后逆光") if x in prompt)
+        tone = next(x for x in ("胶片颗粒", "冷凝青蓝", "暖褐复古", "黑白摄影") if x in prompt)
+        seen.add((shot, light, tone))
+    assert len(seen) == 6
+
+
+def test_三种风格都受_nonce_影响() -> None:
+    for style in ("character", "group", "scene"):
+        a = build_cover_prompt(style, "同标题", BRIEF, PLAN, nonce="a")
+        b = build_cover_prompt(style, "同标题", BRIEF, PLAN, nonce="b")
+        assert a["seed"] != b["seed"], style

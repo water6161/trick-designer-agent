@@ -267,7 +267,7 @@ def _user_id(context: Any) -> str:
 _RATE_BUCKETS: dict[str, list[float]] = {}
 _RATE_LIMIT_RULES: dict[str, tuple[int, int]] = {
     "generate": (10, 600),   # 生成：10 分钟内最多 10 次
-    "ai_cover": (5, 600),    # 生图：10 分钟内最多 5 次
+    "ai_cover": (8, 600),    # 生图：10 分钟内最多 8 次（换一张会连点，留出重掷余量）
 }
 
 
@@ -470,12 +470,19 @@ async def _handle_export(store: Any, conversation_id: str) -> dict[str, Any]:
     }
 
 
-async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: str = "character") -> dict[str, Any]:
+async def _handle_ai_cover(
+    env: Any,
+    store: Any,
+    conversation_id: str,
+    style: str = "character",
+    nonce: str = "",
+) -> dict[str, Any]:
     """调用通义万相生成 AI 封面插画，返回 base64 图片（前端再叠加标题文字）。
 
     走 DashScope 异步文生图接口：建任务 → 轮询 → 取图 → 转 base64。
     任何一步失败都返回友好 error，不影响其他功能。
     style: character=人物海报 / group=群像剪影 / scene=场景氛围
+    nonce: 换图凭据。缺省时随机生成 → 每次点都出新图；同一个 nonce 可复现同一张
     """
     import base64
 
@@ -490,7 +497,8 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
     title = str(export.get("title") or "未命名诡计方案")[:24]
     # prompt 全部由 cover.py 按方案素材构建：角色外形锚点 / 真实线索道具 / 现场，
     # 外加按标题哈希的 seed——两个同题材的本不再生成同一张图
-    spec = build_cover_prompt(style, title, export.get("brief"), export.get("plan"))
+    nonce = str(nonce or "").strip()[:32] or uuid.uuid4().hex[:8]
+    spec = build_cover_prompt(style, title, export.get("brief"), export.get("plan"), nonce=nonce)
     prompt = spec["prompt"]
     negative = spec["negative"]
     model = spec["model"]
@@ -539,7 +547,9 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
 
     try:
         image = await asyncio.to_thread(_call)
-        return {"image": image, "title": export.get("title") or title}
+        # 记下 nonce：事后想复现同一张图，拿它重跑即可
+        logger.log("ai cover generated", {"nonce": nonce, "style": style, "seed": seed})
+        return {"image": image, "title": export.get("title") or title, "nonce": nonce}
     except Exception as exc:  # noqa: BLE001
         logger.exception("ai cover failed", exc)
         msg = str(exc)[:200]
@@ -770,7 +780,8 @@ async def handler(context: Any):
         except Exception as exc:  # noqa: BLE001
             logger.exception("init env failed", exc)
             return {"error": "模型初始化失败，请检查网关配置。"}
-        return await _handle_ai_cover(cover_env, store, conversation_id, cover_style)
+        nonce = str(body.get("nonce") or "")[:32]
+        return await _handle_ai_cover(cover_env, store, conversation_id, cover_style, nonce)
     if action not in ("chat", "retry"):
         return {"error": f"未知 action：{action}"}
 

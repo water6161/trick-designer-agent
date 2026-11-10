@@ -213,18 +213,31 @@ export interface ExportPlan {
 
 export type AICoverStyle = 'character' | 'group' | 'scene'
 
-export async function aiCover(conversationId: string, style: AICoverStyle = 'character'): Promise<{ image: string; title: string }> {
+/**
+ * 生成 AI 封面插画。
+ * nonce 是「换图凭据」：每次传新值就出一张新构图，传同值可复现同一张；
+ * 留空时后端自己随机，结果同样是每次不同。
+ */
+export async function aiCover(
+  conversationId: string,
+  style: AICoverStyle = 'character',
+  nonce = '',
+): Promise<{ image: string; title: string; nonce: string }> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',
     headers: headers(conversationId),
-    body: JSON.stringify({ action: 'ai_cover', cover_style: style }),
+    body: JSON.stringify({ action: 'ai_cover', cover_style: style, nonce }),
   })
   const data = (await readJson(response)) as Record<string, unknown>
   if (data.error) throw new Error(String(data.error))
   if (typeof data.image !== 'string' || !data.image.startsWith('data:image/')) {
     throw new Error('AI 封面返回格式异常。')
   }
-  return { image: data.image, title: typeof data.title === 'string' ? data.title : '未命名诡计方案' }
+  return {
+    image: data.image,
+    title: typeof data.title === 'string' ? data.title : '未命名诡计方案',
+    nonce: typeof data.nonce === 'string' ? data.nonce : nonce,
+  }
 }
 
 export async function exportPlan(conversationId: string): Promise<ExportPlan> {
