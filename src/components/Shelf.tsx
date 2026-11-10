@@ -1,26 +1,71 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Markdown } from '../lib/markdown'
 import { copyText } from '../lib/exporters'
 import { filterShelf, snippetAround, type ShelfItem, type ShelfSort } from '../lib/shelf'
+import {
+  applyBackup,
+  backupFileName,
+  buildBackup,
+  parseBackup,
+  restoreSummary,
+} from '../lib/backup'
 
 interface Props {
   items: ShelfItem[]
   onClose: () => void
   onDelete: (id: string) => void
+  /** 当前输入框草稿：备份要把它带上 */
+  draft?: string
+  /** 恢复后刷新书架列表 */
+  onRestore?: () => void
 }
 
 /** 往期案卷：本地书架抽屉，点击回看 / 复制 / 导出。 */
-export default function Shelf({ items, onClose, onDelete }: Props) {
+export default function Shelf({ items, onClose, onDelete, draft, onRestore }: Props) {
   const [active, setActive] = useState<ShelfItem | null>(null)
   const [msg, setMsg] = useState('')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<ShelfSort>('recent')
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const visible = useMemo(() => filterShelf(items, query, sort), [items, query, sort])
 
   const flash = (text: string) => {
     setMsg(text)
     window.setTimeout(() => setMsg(''), 3000)
+  }
+
+  // ── 备份 / 恢复：数据只存本机，备份文件归用户自己保管 ──
+  const downloadBackup = () => {
+    const blob = new Blob([JSON.stringify(buildBackup(draft ?? ''), null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = backupFileName()
+    // 挂进文档再点：部分浏览器（尤其 headless）对游离节点不触发下载
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // 回收留给下一轮宏任务：同步 revoke 会把刚开始的下载掐死
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    flash('备份已下载——含书架、批注与草稿')
+  }
+
+  const restoreFromFile = async (file: File) => {
+    try {
+      const text = await file.text()
+      const parsed = parseBackup(text)
+      if (!parsed.ok) {
+        flash(parsed.error)
+        return
+      }
+      flash(restoreSummary(applyBackup(parsed.data)))
+      onRestore?.()
+    } catch {
+      flash('读取文件失败，请重试。')
+    }
   }
 
   const downloadWord = async (item: ShelfItem) => {
@@ -105,6 +150,27 @@ export default function Shelf({ items, onClose, onDelete }: Props) {
                 </select>
               </div>
             )}
+
+            <div className="shelf-backup">
+              <button className="shelf-backup-btn" onClick={downloadBackup}>
+                ⬇ 备份数据
+              </button>
+              <button className="shelf-backup-btn" onClick={() => fileRef.current?.click()}>
+                ⬆ 从备份恢复
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void restoreFromFile(file)
+                  event.target.value = ''
+                }}
+              />
+              <span className="shelf-backup-hint">书架、批注、草稿打包成一个 JSON 文件，只存在你手里</span>
+            </div>
 
             {items.length === 0 && (
               <p className="shelf-empty">书架还是空的。生成方案后会自动存入最近 12 份。</p>

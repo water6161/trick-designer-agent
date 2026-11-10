@@ -77,7 +77,9 @@ textarea {
 
 .sidebar {
   position: relative;
-  z-index: 20;
+  /* z-index 1：弹层都挂在 .main（z-index 10 的层叠上下文）里，
+   侧栏若比 main 高，面板里靠左的元素会被侧栏拦截点击（备份按钮就栽过） */
+  z-index: 1;
   display: flex;
   flex-direction: column;
   width: 288px;
@@ -3832,3 +3834,16 @@ button:disabled,
 .replay-controls .replay-play { color: #171a26; background: #b09a55; border-color: #b09a55; font-weight: 600; }
 .replay-controls .replay-play:hover { color: #171a26; }
 .replay-controls .replay-exit { color: #9aa3b8; }
+
+/* ── 数据备份：书架面板底部的导出/恢复 ── */
+.shelf-backup {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 4px 14px 12px; padding: 10px 12px;
+  background: #12151d; border: 1px dashed #2c3344; border-radius: 9px;
+}
+.shelf-backup-btn {
+  padding: 6px 12px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+  color: #d8cfb4; background: #1d2130; border: 1px solid #3a3320; border-radius: 8px;
+}
+.shelf-backup-btn:hover { background: rgba(176, 154, 85, 0.2); color: #e8d9ae; }
+.shelf-backup-hint { flex: 1; min-width: 160px; font-size: 11px; line-height: 1.5; color: #5d6577; }

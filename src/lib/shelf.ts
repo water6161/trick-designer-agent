@@ -50,6 +50,43 @@ export function removeFromShelf(id: string): void {
   }
 }
 
+/**
+ * 批量合并书架（备份恢复用）：按会话 id 去重，savedAt 新者胜。
+ * 返回新增/更新条数，让 UI 能报出「恢复了几份」。
+ */
+export function mergeShelf(items: ShelfItem[]): { added: number; updated: number } {
+  const valid = items.filter((it) => it && typeof it.id === 'string' && typeof it.markdown === 'string')
+  if (!valid.length) return { added: 0, updated: 0 }
+  const current = new Map(listShelf().map((it) => [it.id, it]))
+  let added = 0
+  let updated = 0
+  for (const item of valid) {
+    const incoming: ShelfItem = {
+      id: item.id,
+      title: typeof item.title === 'string' ? item.title : '未命名方案',
+      markdown: item.markdown.length > MAX_CHARS ? item.markdown.slice(0, MAX_CHARS) : item.markdown,
+      savedAt: typeof item.savedAt === 'number' ? item.savedAt : 0,
+    }
+    const existing = current.get(item.id)
+    if (!existing) {
+      current.set(item.id, incoming)
+      added += 1
+    } else if ((incoming.savedAt || 0) > (existing.savedAt || 0)) {
+      current.set(item.id, incoming)
+      updated += 1
+    }
+  }
+  try {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([...current.values()].sort((a, b) => b.savedAt - a.savedAt)),
+    )
+  } catch {
+    // 配额满：恢复失败静默，主流程不受影响
+  }
+  return { added, updated }
+}
+
 /** 从方案 Markdown 提取标题（# 开头第一行）。 */
 export function planTitle(markdown: string, fallback = '未命名方案'): string {
   const m = markdown.match(/^#\s*[《“"]?([^《》\n#]{2,40})[》”"]?/m)

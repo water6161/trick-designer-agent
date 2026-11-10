@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 
 /**
  * 跨模块 e2e：真浏览器里跑完「输入 → SSE 流式渲染 → 质量卡/硬规则卡 → 玩家本 → 分享链接 → 分享页」。
@@ -474,6 +475,48 @@ test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带�
   await expect
     .poll(async () => page.evaluate(() => Number((window as never as Record<string, number>).__printCount ?? 0)))
     .toBe(1)
+})
+
+test('数据备份：书架一键导出 JSON，再从文件恢复回来', async ({ page }) => {
+  // 移除走 window.confirm，Playwright 默认会 dismiss——这里显式接受
+  page.on('dialog', (dialog) => void dialog.accept())
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  // 方案生成后自动入书架
+  await page.getByRole('button', { name: '📚 案卷' }).click()
+  const panel = page.getByRole('dialog', { name: '案卷书架' })
+  await expect(panel.locator('.shelf-item')).toHaveCount(1)
+
+  // 下载备份：Playwright 拦 download，落盘后再读回内容做导入
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    panel.getByRole('button', { name: '⬇ 备份数据' }).click(),
+  ])
+  expect(download.suggestedFilename()).toContain('trick-designer-backup-')
+  const path = await download.path()
+  const backupText = readFileSync(path!, 'utf-8')
+  const backup = JSON.parse(backupText)
+  expect(backup.app).toBe('trick-designer')
+  expect(backup.shelf).toHaveLength(1)
+  expect(backup.shelf[0].title).toBe('雪落无声的第七夜')
+
+  // 清空本机数据（模拟换设备）：删掉书架里那份
+  await panel.locator('.shelf-item').click()
+  // 移除走 window.confirm，开头注册的 handler 会自动接受
+  await panel.getByRole('button', { name: '移除' }).click()
+  await expect(panel.locator('.shelf-empty')).toBeVisible()
+
+  // 从备份文件恢复
+  // 直接给隐藏的 file input 喂文件
+  await panel.locator('input[type="file"]').setInputFiles({
+    name: 'backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(backupText),
+  })
+  await expect(panel.locator('.shelf-msg')).toContainText('新增 1 份方案')
+  await expect(panel.locator('.shelf-item')).toHaveCount(1)
+  await expect(panel.locator('.shelf-item-title')).toContainText('雪落无声的第七夜')
 })
 
 test('案件重演：逐帧回放时间线，线索联动，终幕落真相', async ({ page }) => {

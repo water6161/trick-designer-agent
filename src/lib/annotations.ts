@@ -150,6 +150,37 @@ export function clearAnnotations(conversationId: string, storage?: StorageLike):
   )
 }
 
+/**
+ * 批量合并批注（备份恢复用）：按 id 去重，createdAt 新者胜。
+ */
+export function mergeAnnotations(items: Annotation[]): { added: number; updated: number } {
+  const valid = items.filter(
+    (item) =>
+      !!item &&
+      typeof item.id === 'string' &&
+      typeof item.conversationId === 'string' &&
+      typeof item.messageId === 'string' &&
+      typeof item.quote === 'string' &&
+      typeof item.note === 'string',
+  )
+  if (!valid.length) return { added: 0, updated: 0 }
+  const current = new Map(readAll().map((item) => [item.id, item]))
+  let added = 0
+  let updated = 0
+  for (const item of valid) {
+    const existing = current.get(item.id)
+    if (!existing) {
+      current.set(item.id, item)
+      added += 1
+    } else if ((item.createdAt || 0) > (existing.createdAt || 0)) {
+      current.set(item.id, item)
+      updated += 1
+    }
+  }
+  writeAll([...current.values()].sort((a, b) => a.createdAt - b.createdAt))
+  return { added, updated }
+}
+
 /** 导出成带出处的纯文本：贴进备忘录、群里同步修改意见都直接能用。 */
 export function annotationsToText(items: Annotation[]): string {
   return items

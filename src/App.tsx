@@ -772,6 +772,8 @@ function MainApp() {
               removeFromShelf(id)
               setShelfItems(listShelf())
             }}
+            draft={input}
+            onRestore={() => setShelfItems(listShelf())}
           />
         </Suspense>
       )}
