@@ -2799,8 +2799,22 @@ button:disabled,
 .export-menu .export-menu-ai { color: #c9b47a; }
 
 @media (max-width: 640px) {
-  .tools-dropdown, .export-menu { position: fixed; top: auto; bottom: 76px; left: 12px; right: 12px; min-width: 0; }
+  /* 注意：.topbar 有 backdrop-filter，会成为 fixed 后代的包含块——
+     这里不能再用 fixed 定位（菜单会相对 74px 高的顶栏飞出屏幕外），
+     改回 absolute（相对 .tools-menu），靠限制高度 + 滚动容纳七个子项 */
+  .tools-dropdown, .export-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    min-width: 0;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
   .tools-dropdown button, .export-menu button { padding: 13px 16px; font-size: 15px; }
+  /* 菜单展开时顶栏的毛玻璃会把菜单裁掉一截的视觉问题一并规避 */
+  .topbar { background: rgba(7, 9, 13, 0.92); }
 }
 
 /* ── 质量体检评分卡 ───────────────────────────── */
@@ -3865,4 +3879,55 @@ button:disabled,
 .shortcut-foot {
   margin: 8px 20px 14px; padding-top: 10px; border-top: 1px solid #1d2331;
   font-size: 11.5px; line-height: 1.6; color: #5d6577;
+}
+
+/* ═════════ 移动端开本适配（≤640px）：触控目标、表格滚动、iOS 防缩放 ═════════ */
+@media (max-width: 640px) {
+  /* 弹层吃满屏宽，只在顶部留一条缝看得到「这是弹层」 */
+  .modal-overlay { padding: 8px; align-items: stretch; }
+  .modal-panel {
+    width: 100% !important;
+    max-width: 100%;
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+
+  /* iOS Safari：输入框字号 <16px 聚焦时会自动放大页面，聚焦后还缩不回去 */
+  .composer-input { font-size: 16px; }
+  .session-search { font-size: 16px; }
+  .annot-pop-editor textarea { font-size: 16px; }
+
+  /* 触控目标 ≥44px：小图标按钮放大热区（视觉尺寸不变，靠内边距撑） */
+  .icon-btn { width: 44px; height: 44px; }
+  .annot-del, .notes-del { width: 32px; height: 32px; line-height: 30px; }
+  .replay-dot { width: 16px; height: 16px; }
+  .replay-controls button { min-height: 44px; }
+  .dm-timer-btn, .dm-print-btn, .tl-replay-btn, .notes-copy, .shelf-backup-btn {
+    min-height: 40px;
+  }
+  .dm-phase { padding: 9px 13px; }
+  .dm-clues label { min-height: 44px; }
+  .dm-clues ul { max-height: 34vh; }
+  .annot-pop-save, .annot-pop-cancel { min-height: 40px; }
+
+  /* DM 台阶段标签：窄屏横向滑动比换行挤压更好按 */
+  .dm-phases { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 10px; -webkit-overflow-scrolling: touch; }
+  .dm-phase { flex: none; }
+
+  /* 正文表格已在 .table-wrap 里横向滚动；这里把表格字号撑到可读 */
+  .markdown table { font-size: 13px; }
+  .markdown th, .markdown td { padding: 6px 8px; }
+
+  /* 角色卡单列、消息留白收紧 */
+  .role-grid { grid-template-columns: 1fr; }
+  .msg { padding: 8px 6px; }
+  .annot-item { max-width: 100%; }
+
+  /* 快捷键卡与批注面板底部说明不被键盘顶没 */
+  .notes-list { max-height: 52vh; }
+  .shortcut-list { max-height: 56vh; overflow-y: auto; }
+
+  /* 备份区提示换行不挤按钮 */
+  .shelf-backup { gap: 6px; }
+  .shelf-backup-hint { flex-basis: 100%; }
 }

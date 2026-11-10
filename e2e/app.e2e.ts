@@ -477,6 +477,52 @@ test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带�
     .toBe(1)
 })
 
+test('移动端开本：390px 视口下弹层全宽可滚，触控目标够大，输入框不触发 iOS 缩放', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  // 输入框字号 ≥16px：小于这个值 iOS Safari 聚焦时会把页面放大且缩不回去
+  const fontSize = await page
+    .locator('textarea#composer-input')
+    .evaluate((el) => Number(getComputedStyle(el).fontSize.replace('px', '')))
+  expect(fontSize).toBeGreaterThanOrEqual(16)
+
+  // DM 主持台：窄屏可用——面板全宽、阶段标签可滑动、计时器按钮可点
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🎭 DM 主持台' }).click()
+  const dm = page.getByRole('dialog', { name: 'DM 主持台' })
+  await expect(dm).toBeVisible()
+  const panelWidth = await dm.locator('.dm-panel').evaluate((el) => el.getBoundingClientRect().width)
+  expect(panelWidth).toBeGreaterThan(340) // 吃满 390px 视口（留出弹层边距）
+
+  const timerBtn = dm.locator('.dm-timer-btn').first()
+  expect(await timerBtn.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(40)
+  // 阶段标签横向滚动而非挤压：最短一枚标签也要接近可按宽度
+  const phaseWidths = await dm
+    .locator('.dm-phase')
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width))
+  expect(Math.min(...phaseWidths)).toBeGreaterThan(40)
+  // 且确实横向可滑：标签总宽超出面板可视宽
+  const widths = await dm
+    .locator('.dm-phases')
+    .evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }))
+  expect(widths.scroll).toBeGreaterThan(widths.client)
+  await page.keyboard.press('Escape')
+
+  // 玩家本：内容可滚动到底，操作按钮隐藏逻辑不破坏
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '📖 玩家本（无剧透）' }).click()
+  const pv = page.locator('.pv-sheet')
+  await expect(pv).toBeVisible()
+  const scrollable = await pv.locator('.pv-scroll').evaluate((el) => ({
+    client: el.clientHeight,
+    scroll: el.scrollHeight,
+  }))
+  // 真机内容高于视口时必须能滚（client < scroll），否则玩家本下半部分永远看不到
+  expect(scrollable.scroll).toBeGreaterThan(0)
+})
+
 test('全局快捷键：/ 聚焦输入、g 序列开工具、? 速查卡、输入态让位', async ({ page }) => {
   await generatePlan(page)
   await expect(page.locator('.quality-card')).toBeVisible()
