@@ -197,3 +197,26 @@ class TestEndings:
     def test_结局章节为空表时不产出字段(self):
         md = "### 结局分支\n\n| 结局 | 触发条件 | 支撑线索 | 走向 |\n|---|---|---|---|\n"
         assert "endings" not in parse_plan_from_markdown(md)
+
+class TestLook:
+    """角色表新增「外形锚点」列：驱动立绘一致性的文本锚点。"""
+
+    def test_解析外形锚点列(self):
+        md = (
+            "### 角色表\n\n"
+            "| 角色 | 身份 | 秘密 | 被怀疑点 | 外形锚点 |\n"
+            "|---|---|---|---|---|\n"
+            "| 沈墨 | 管家 | 偷换遗嘱 | 争吵 | 五十岁，灰白短发，深灰长衫 |\n"
+        )
+        chars = parse_plan_from_markdown(md)["characters"]
+        assert chars[0]["look"] == "五十岁，灰白短发，深灰长衫"
+
+    def test_旧表头没有外形列时字段为空(self):
+        md = (
+            "### 角色表\n\n"
+            "| 角色 | 身份 | 秘密 | 被怀疑点 |\n"
+            "|---|---|---|---|\n"
+            "| 沈墨 | 管家 | 偷换遗嘱 | 争吵 |\n"
+        )
+        chars = parse_plan_from_markdown(md)["characters"]
+        assert chars[0]["look"] == ""

@@ -110,6 +110,7 @@ export function parsePlanFromMarkdown(md: string): PlanData {
     identity: pick(row, ['身份']),
     secret: pick(row, ['秘密']),
     suspicion: pick(row, ['怀疑']),
+    look: pick(row, ['外形锚点', '外形', '视觉锚点']),
   }))
 
   for (const [key, sub] of [['clues_public', '公开线索'], ['clues_deep', '深入线索']] as const) {

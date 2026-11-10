@@ -129,6 +129,7 @@ def parse_plan_from_markdown(md: str) -> dict[str, Any]:
             "identity": _first(row, "身份"),
             "secret": _first(row, "秘密"),
             "suspicion": _first(row, "被怀疑点", "怀疑点"),
+            "look": _first(row, "外形锚点", "外形", "视觉锚点"),
         }
         for row in char_table
     ]

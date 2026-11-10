@@ -3571,3 +3571,89 @@ button:disabled,
   .ending-branches { padding-left: 12px; }
   .ending-card { padding: 9px 11px; }
 }
+
+/* ── 角色立绘：确定性肖像 + 提示词 ── */
+.role-style-anchor {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.role-toast {
+  margin: 0 0 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  color: #cfe2f2;
+  background: rgba(91, 127, 163, 0.14);
+  border: 1px solid rgba(91, 127, 163, 0.3);
+}
+
+.role-portrait {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 8px 0 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.07);
+}
+.role-portrait-art {
+  flex-shrink: 0;
+  width: 60px;
+  line-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.role-portrait-art svg {
+  width: 60px;
+  height: 70px;
+  display: block;
+}
+.role-portrait-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding-top: 2px;
+}
+.role-seed {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.role-copy {
+  align-self: flex-start;
+  padding: 3px 9px;
+  font-size: 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #c4b795;
+  background: transparent;
+  border: 1px solid #3a3427;
+  transition: border-color 0.15s, color 0.15s;
+}
+.role-copy:hover {
+  border-color: #c98a5c;
+  color: #e8d9ae;
+}
+.role-look {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+
+/* 立绘是给人看的，打印时不必印出 seed 与复制按钮 */
+@media print {
+  .role-portrait-meta {
+    display: none !important;
+  }
+  .role-portrait-art {
+    width: 52px;
+  }
+  .role-portrait-art svg {
+    width: 52px;
+    height: 60px;
+  }
+}

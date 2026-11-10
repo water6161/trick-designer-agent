@@ -46,6 +46,8 @@ export interface TimelineEvent {
 }
 
 export interface PlanCharacter {
+  /** 外形锚点：发色/年龄/服装/标志物，用于立绘一致性 */
+  look?: string
   name?: string
   identity?: string
   secret?: string

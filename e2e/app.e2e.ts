@@ -14,8 +14,8 @@ const PLAN = {
   background: '暴雪封山第四天，山庄与外界断联。',
   victim: { name: '顾寒山', identity: '退休法官', death_time: '第一幕 21:40', cause: '中毒', scene: '书房反锁' },
   characters: [
-    { name: '沈墨', identity: '管家', secret: '他偷换了遗嘱', suspicion: '与死者争吵' },
-    { name: '白棠', identity: '外甥女', secret: '她当晚不在房里', suspicion: '继承顺位第一' },
+    { name: '沈墨', identity: '管家', secret: '他偷换了遗嘱', suspicion: '与死者争吵', look: '五十岁，灰白短发，深灰长衫' },
+    { name: '白棠', identity: '外甥女', secret: '她当晚不在房里', suspicion: '继承顺位第一', look: '二十四岁，黑长直，酒红连衣裙' },
   ],
   clues_public: [
     { id: 'C1', name: '调快的怀表', content: '怀表快二十分钟', points_to: '指向白棠', access: '公开阅读' },
@@ -100,6 +100,20 @@ const MARKDOWN = `# 《雪落无声的第七夜》
 ### 成立条件与现实不可复刻说明
 
 成立条件：需要一根足够韧的丝线、一扇有门缝的木门、以及无人核对的时钟。现实中监控与电子计时会让这套手法立刻失效。
+
+## 四、凶手与人物逻辑
+
+### 凶手
+
+凶手：白棠
+动机：她才是真正的继承人
+
+### 角色表
+
+| 角色 | 身份 | 秘密 | 被怀疑点 | 外形锚点 |
+|---|---|---|---|---|
+| 沈墨 | 管家 | 他偷换了遗嘱 | 与死者争吵 | 五十岁，灰白短发，深灰长衫 |
+| 白棠 | 外甥女 | 她当晚不在房里 | 继承顺位第一 | 二十四岁，黑长直，酒红连衣裙 |
 
 ## 五、线索清单
 
@@ -479,4 +493,46 @@ test('结局分支树：真结局徽章、线索编号 chips、幽灵编号标�
 
   await page.keyboard.press('Escape')
   await expect(panel).toHaveCount(0)
+})
+
+test('角色立绘：每个角色一张确定性肖像，重开弹层还是同一张脸', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🃏 角色速览卡' }).click()
+
+  const panel = page.getByRole('dialog', { name: '角色速览卡' })
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.role-card')).toHaveCount(2)
+  await expect(panel.locator('.role-portrait-art svg')).toHaveCount(2)
+  await expect(panel).toContainText('统一画风')
+
+  // 外形锚点来自角色表新增列
+  await expect(panel).toContainText('灰白短发')
+
+  const seedsFirst = await panel.locator('.role-portrait-art').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('data-seed')),
+  )
+  const svgFirst = await panel.locator('.role-portrait-art svg').evaluateAll((nodes) =>
+    nodes.map((node) => node.outerHTML),
+  )
+  expect(seedsFirst.filter(Boolean)).toHaveLength(2)
+  // 两个角色必须长得不一样，否则「一致性」等于没做
+  expect(new Set(svgFirst).size).toBe(2)
+
+  // 关掉再开：seed 与画面都不变
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🃏 角色速览卡' }).click()
+  const reopened = page.getByRole('dialog', { name: '角色速览卡' })
+  const seedsSecond = await reopened.locator('.role-portrait-art').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('data-seed')),
+  )
+  const svgSecond = await reopened.locator('.role-portrait-art svg').evaluateAll((nodes) =>
+    nodes.map((node) => node.outerHTML),
+  )
+  expect(seedsSecond).toEqual(seedsFirst)
+  expect(svgSecond).toEqual(svgFirst)
 })
