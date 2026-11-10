@@ -23,6 +23,7 @@ from .config import ConfigError, load_env
 from .dedup import collect_fingerprints
 from .graph import build_graph
 from .logger import create_logger
+from .cover import build_cover_prompt
 from .mdplan import parse_plan_from_markdown
 from .models import init_models
 
@@ -487,39 +488,14 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
         return {"error": "当前模型服务不支持 AI 生图。"}
 
     title = str(export.get("title") or "未命名诡计方案")[:24]
-    brief = export.get("brief") or {}
-    genre = str(brief.get("genre") or "")
-    era = str(brief.get("era") or brief.get("background") or "")
-    era_part = f"，{era}背景" if era else ""
-    if style == "group":
-        # 电影剧照式群像：围桌单一光源构图，人脸自然且光影统一
-        prompt = (
-            f"电影级剧照，{genre}题材{era_part}悬疑群像，昏暗餐厅长桌旁围坐五人，"
-            "五人年龄性别身份各不相同、服装贴合时代背景，各怀心思互不对视，"
-            "烛光单一光源从桌面升起照亮各人面部，背景深色木墙与阴影，"
-            "胶片颗粒，褪色色调，强烈明暗对比，摄影级画质，画面留有顶部标题空间，画面中无任何文字水印"
-        )
-    elif style == "scene":
-        prompt = (
-            f"剧本杀游戏封面插画，{title}，{genre}题材，悬疑惊悚氛围，"
-            "深蓝夜色与暗红色调，电影级光影，戏剧性构图，细节丰富，"
-            "高清大师级插画画质，画面中不要出现任何文字、字母或水印"
-        )
-    else:  # character（默认）：主角人物海报，电影剧照风
-        prompt = (
-            f"电影级剧本杀海报，{genre}题材{era_part}悬疑剧照风格，一位主角半身特写占据画面右侧三分之二，"
-            "侧身回望镜头，眼神沉静而锐利，右手握着一件关键线索道具（怀表/信件/匕首），"
-            "单一冷光从左上方打在脸侧，另半边脸沉入阴影，"
-            "背景是虚化的老宅走廊与暗红帷幔，强烈明暗对比，"
-            "胶片颗粒质感，褪色色调，画面留有干净的标题区，"
-            "高度写实，摄影级画质，画面中无任何文字水印"
-        )
-    negative = (
-        "文字, 字母, 水印, 血腥, 恐怖恶心, 低质量, 模糊, 变形, 多余手指, 面部扭曲, 脸部畸形, 五官错位"
-        + (", 卡通, 动漫, 二次元, 平面插画, 拼贴, 分格" if style != "scene" else "")
-    )
-    # 有人物时用 wan2.5（电影剧照质感最稳），纯场景用高速 turbo
-    model = "wan2.5-t2i-preview" if style in ("character", "group") else "wanx2.1-t2i-turbo"
+    # prompt 全部由 cover.py 按方案素材构建：角色外形锚点 / 真实线索道具 / 现场，
+    # 外加按标题哈希的 seed——两个同题材的本不再生成同一张图
+    spec = build_cover_prompt(style, title, export.get("brief"), export.get("plan"))
+    prompt = spec["prompt"]
+    negative = spec["negative"]
+    model = spec["model"]
+    size = spec["size"]
+    seed = spec["seed"]
 
     api_key = getattr(env, "api_key", "")
     base = str(getattr(env, "base_url", "")).replace("/compatible-mode/v1", "")
@@ -532,7 +508,7 @@ async def _handle_ai_cover(env: Any, store: Any, conversation_id: str, style: st
             json={
                 "model": model,
                 "input": {"prompt": prompt, "negative_prompt": negative},
-                "parameters": {"n": 1, "size": "960*1280" if style != "scene" else "720*960", "prompt_extend": True},
+                "parameters": {"n": 1, "size": size, "seed": seed, "prompt_extend": False},
             },
             timeout=30,
         )
