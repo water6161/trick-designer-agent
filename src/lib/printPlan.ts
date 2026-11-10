@@ -108,7 +108,7 @@ function mdToHtml(md: string): string {
   return out.join('\n')
 }
 
-const PRINT_CSS = `
+export const PRINT_CSS = `
 @page { size: A4; margin: 18mm 16mm 16mm; }
 * { box-sizing: border-box; }
 body {

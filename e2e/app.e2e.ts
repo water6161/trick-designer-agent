@@ -423,6 +423,59 @@ test('玩家本打印版式：打印媒体下变白底黑字，操作按钮隐�
   await expect(panel.locator('.pv-print')).toBeVisible()
 })
 
+test('DM 主持手册：一键排成纸质手册，全阶段都在、线索带勾选框', async ({ page }) => {
+  // 真开窗口会停在系统打印对话框上，这里接管 window.open 只收内容
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>
+    w.__printDocs = []
+    w.__printCount = 0
+    w.open = () => ({
+      document: {
+        write(html: string) {
+          ;(w.__printDocs as string[]).push(html)
+        },
+        close() {},
+      },
+      addEventListener(type: string, cb: () => void) {
+        if (type === 'load') setTimeout(cb, 0)
+      },
+      focus() {},
+      print() {
+        w.__printCount = (w.__printCount as number) + 1
+      },
+    })
+  })
+
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🎭 DM 主持台' }).click()
+  const dialog = page.getByRole('dialog', { name: 'DM 主持台' })
+  await expect(dialog).toBeVisible()
+
+  // 屏幕上一次只显示一个阶段，主持人点到「打印手册」
+  await dialog.getByRole('button', { name: '🖨 打印手册' }).click()
+
+  const html = await page.evaluate(() => String((window as never as Record<string, string[]>).__printDocs?.[0] ?? ''))
+  expect(html).toContain('DM 主持手册')
+  expect(html).toContain('雪落无声的第七夜')
+
+  // 纸上必须一次看到全部流程，否则线下主持要不停翻页
+  for (const label of ['开场', '第一轮·公开线索', '指认讨论', '投票指认', '复盘揭秘']) {
+    expect(html).toContain(label)
+  }
+  // 线索排成可打勾的方框：发一条勾一条，纸上的勾比屏幕上的状态更可靠
+  expect(html).toContain('class="box"')
+  expect(html).toContain('调快的怀表')
+  expect(html).toContain('复盘念稿')
+
+  // 布局就绪后自动唤起打印，避免打出空白页
+  await expect
+    .poll(async () => page.evaluate(() => Number((window as never as Record<string, number>).__printCount ?? 0)))
+    .toBe(1)
+})
+
 test('会话列表：搜索过滤 + 删除需要点两次', async ({ page }) => {
   const today = new Date().toISOString()
   // 单独覆盖会话列表，不影响其他用例的 mock

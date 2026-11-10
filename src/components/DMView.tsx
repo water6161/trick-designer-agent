@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parsePlanFromMarkdown } from '../lib/parsePlan'
+import { printDM } from '../lib/printDM'
 import { useSpeech } from '../hooks/useSpeech'
 import type { ClueData } from '../types'
 
@@ -13,6 +14,8 @@ interface Phase {
   label: string
   minutes: number
   brief: string
+  /** 该阶段要发放的线索；开场/讨论/投票/复盘为空 */
+  clues: ClueData[]
 }
 
 /** DM 主持台：流程引导 + 线索发放清单 + 计时器，拿平板就能开本。 */
@@ -27,6 +30,7 @@ export default function DMView({ markdown, onClose }: Props) {
         minutes: 10,
         brief:
           '介绍背景与规则：陈述案件概况（死者、死因、现场），说明公开线索的获取方式，提醒玩家「所有人都在说谎，但线索不会」。',
+        clues: [],
       },
     ]
     const pub = plan.clues_public || []
@@ -37,6 +41,7 @@ export default function DMView({ markdown, onClose }: Props) {
         label: '第一轮·公开线索',
         minutes: 15,
         brief: '按下面的清单逐一发放公开线索，玩家可以自由搜证与交换信息。发完进入自由讨论。',
+        clues: pub,
       })
     if (deep.length)
       list.push({
@@ -44,24 +49,28 @@ export default function DMView({ markdown, onClose }: Props) {
         label: '第二轮·深入线索',
         minutes: 15,
         brief: '深入线索通常需要消耗行动点或完成条件后解锁，发放时注意节奏，别让一轮拿光。',
+        clues: deep,
       })
     list.push({
       key: 'discuss',
       label: '指认讨论',
       minutes: 10,
       brief: '引导玩家依次陈述：我认为谁是凶手、依据是什么。鼓励互相质询时间线上的矛盾点。',
+      clues: [],
     })
     list.push({
       key: 'vote',
       label: '投票指认',
       minutes: 3,
       brief: '每人一票，写下心目中的凶手。平票时让得票最高者做最后陈词后重投。',
+      clues: [],
     })
     list.push({
       key: 'reveal',
       label: '复盘揭秘',
       minutes: 10,
       brief: '公布真相与凶手手法，逐条回收伏笔；对照证据链说明哪些线索指向真相、哪些是红鲱鱼。',
+      clues: [],
     })
     return list
   }, [plan])
@@ -72,14 +81,31 @@ export default function DMView({ markdown, onClose }: Props) {
   const [running, setRunning] = useState(false)
   const timerRef = useRef<number | null>(null)
   const speech = useSpeech()
+  const [printError, setPrintError] = useState('')
+
+  // 打印手册：屏幕上一次只显示一个阶段，纸质手册要的是全阶段一览
+  const handlePrint = () => {
+    const text = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value.trim() : undefined
+    try {
+      setPrintError('')
+      printDM(phases, {
+        title: text(plan.title),
+        genre: text(plan.genre),
+        players: text(plan.players),
+        difficulty: text(plan.difficulty),
+        culprit: text(plan.culprit?.character),
+        motive: text(plan.culprit?.motive),
+        hiddenEnding: text(plan.hidden_ending?.ending),
+        endings: plan.endings,
+      })
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : '打印窗口打开失败，请检查浏览器拦截设置。')
+    }
+  }
 
   const phase = phases[phaseIdx]
-  const roundClues: ClueData[] =
-    phase.key === 'round1'
-      ? plan.clues_public || []
-      : phase.key === 'round2'
-        ? plan.clues_deep || []
-        : []
+  const roundClues: ClueData[] = phase.clues
 
   useEffect(() => {
     setLeft(phases[phaseIdx].minutes * 60)
@@ -123,8 +149,23 @@ export default function DMView({ markdown, onClose }: Props) {
       <div className="modal-panel dm-panel" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>🎭 DM 主持台</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="关闭主持台">✕</button>
+          <div className="modal-head-actions">
+            <button
+              className="dm-print-btn"
+              onClick={handlePrint}
+              title="把全部阶段排成 A4 纸手册打印，可在打印对话框里另存为 PDF"
+            >
+              🖨 打印手册
+            </button>
+            <button className="icon-btn" onClick={onClose} aria-label="关闭主持台">✕</button>
+          </div>
         </header>
+
+        {printError && (
+          <p className="dm-print-error" role="alert">
+            {printError}
+          </p>
+        )}
 
         <nav className="dm-phases">
           {phases.map((p, i) => (
