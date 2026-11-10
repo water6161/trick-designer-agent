@@ -160,6 +160,20 @@ def parse_plan_from_markdown(md: str) -> dict[str, Any]:
         for row in tl_rows
     ]
 
+    # 结局分支（可选章节；旧方案没有就不产出该字段，verify 也按「可选」处理）
+    ending_rows = rows_to_objects(md_rows(md_table_after(md, "结局分支")))
+    endings = [
+        {
+            "name": _first(row, "结局", "结局名", "分支"),
+            "condition": _first(row, "触发条件", "条件", "达成条件"),
+            "clues": _first(row, "支撑线索", "线索"),
+            "outcome": _first(row, "走向", "结局走向", "结局内容"),
+        }
+        for row in ending_rows
+    ]
+    if endings:
+        plan["endings"] = endings
+
     score_match = re.search(r"锁凶充分性评分[：:]\s*(\d{1,3})\s*/\s*100", md)
     if score_match:
         plan["lock_score"] = int(score_match.group(1))

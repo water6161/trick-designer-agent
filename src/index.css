@@ -3507,3 +3507,67 @@ button:disabled,
   color: #ffd0d0;
   background: rgba(176, 88, 88, 0.28);
 }
+
+/* ── 结局分支树 ── */
+.ending-panel { max-width: 640px; }
+.ending-empty { padding: 28px 6px; text-align: center; color: var(--text-soft); font-size: 13.5px; }
+.ending-empty-hint { margin-top: 10px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+
+.ending-tree { padding: 4px 2px 8px; }
+.ending-root {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 10px 14px; border: 1px solid rgba(216, 178, 106, 0.35); border-radius: 10px;
+  background: rgba(216, 178, 106, 0.07);
+}
+.ending-root-label { font-family: var(--font-serif); font-weight: 600; color: var(--gold-strong); }
+.ending-root-culprit { font-size: 12.5px; color: var(--text-soft); }
+
+.ending-branches { list-style: none; margin: 0; padding: 6px 0 0 18px; }
+.ending-branch { position: relative; padding: 6px 0 2px; }
+/* 树干：竖线 + 横枝，纯 CSS 不引图片 */
+.ending-branch::before {
+  content: ""; position: absolute; left: -10px; top: 0; bottom: 0;
+  border-left: 1px solid rgba(160, 150, 120, 0.28);
+}
+.ending-branch:last-child::before { bottom: 55%; }
+.ending-branch::after {
+  content: ""; position: absolute; left: -10px; top: 55%; width: 10px;
+  border-top: 1px solid rgba(160, 150, 120, 0.28);
+}
+.ending-stem { display: none; }
+
+.ending-card {
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg-soft);
+}
+.ending-card.true-ending { border-color: rgba(216, 178, 106, 0.4); }
+.ending-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.ending-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px; }
+.ending-true-badge {
+  flex-shrink: 0; width: 18px; height: 18px; display: inline-grid; place-items: center;
+  font-size: 11px; border-radius: 50%;
+  background: var(--gold); color: #14171f; font-weight: 700;
+}
+.ending-condition { margin: 0; font-size: 12px; color: var(--text-soft); }
+
+.ending-clues { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.ending-clues-label { font-size: 11px; color: var(--muted); letter-spacing: 0.08em; }
+.ending-clue-chip {
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  padding: 2px 8px; border-radius: 999px;
+  color: #cfe2f2; background: rgba(91, 127, 163, 0.18); border: 1px solid rgba(91, 127, 163, 0.4);
+}
+.ending-clue-chip.unknown {
+  color: #e0b1b1; background: rgba(176, 88, 88, 0.16); border-color: rgba(176, 88, 88, 0.45);
+}
+.ending-clue-warn { font-size: 11.5px; color: #cf7b7b; }
+.ending-outcome { margin: 8px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--text-soft); }
+
+.dm-endings { margin-top: 10px; }
+.dm-endings ul { margin: 6px 0 0; padding-left: 18px; }
+.dm-endings li { margin-bottom: 4px; font-size: 12.5px; line-height: 1.6; }
+
+@media (max-width: 640px) {
+  .ending-branches { padding-left: 12px; }
+  .ending-card { padding: 9px 11px; }
+}

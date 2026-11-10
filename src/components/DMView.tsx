@@ -226,6 +226,10 @@ export default function DMView({ markdown, onClose }: Props) {
                       plan.culprit?.character ? `凶手是${plan.culprit.character}。` : '',
                       plan.culprit?.motive ? plan.culprit.motive : '',
                       plan.hidden_ending?.ending ? `隐藏真结局。${plan.hidden_ending.ending}` : '',
+                      ...(plan.endings ?? []).map(
+                        (ending, index) =>
+                          `分支结局${index + 1}。${ending.name ?? ''}${ending.condition ? `，触发条件是${ending.condition}` : ''}${ending.outcome ? `。走向：${ending.outcome}` : ''}`,
+                      ),
                     ]
                       .filter(Boolean)
                       .join('')
@@ -238,6 +242,20 @@ export default function DMView({ markdown, onClose }: Props) {
             </div>
             {plan.culprit?.character && <p><strong>凶手：</strong>{plan.culprit.character}</p>}
             {plan.hidden_ending?.ending && <p><strong>隐藏真结局：</strong>{plan.hidden_ending.ending}</p>}
+            {(plan.endings?.length ?? 0) > 0 && (
+              <div className="dm-endings">
+                <strong>分支结局（{plan.endings!.length} 条）：</strong>
+                <ul>
+                  {plan.endings!.map((ending, index) => (
+                    <li key={`${ending.name ?? index}`}>
+                      <b>{ending.name || `结局 ${index + 1}`}</b>
+                      {ending.condition ? `（触发：${ending.condition}）` : ''}
+                      {ending.outcome ? `——${ending.outcome}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

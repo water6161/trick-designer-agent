@@ -38,6 +38,7 @@ function fullPlan(): PlanData {
     dm_tips: ['开场先强调雪夜封路'],
     anti_argument: ['如果玩家质疑时间线，就把怀表拿出来'],
     hidden_ending: { ending: '白棠其实是被收养的替身' },
+    endings: [{ name: '真相大白', condition: '指认白棠', clues: 'C1', outcome: '白棠伏法' }],
     red_herrings: [{ description: '陆迟的毒药瓶', misleading: '让人以为他是凶手', clear_method: 'C2 细线排除' }],
     interactions: [
       {
@@ -67,6 +68,7 @@ describe('buildPlayerPacket 权限裁剪', () => {
     expect(packet).not.toHaveProperty('dm_tips')
     expect(packet).not.toHaveProperty('hidden_ending')
     expect(packet).not.toHaveProperty('red_herrings')
+    expect(packet).not.toHaveProperty('endings')
   })
 
   it('只回传当事人自己的秘密', () => {

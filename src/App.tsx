@@ -23,6 +23,7 @@ const VersionHistory = lazy(() => import('./components/VersionHistory'))
 const StatsPanel = lazy(() => import('./components/StatsPanel'))
 const PlayerView = lazy(() => import('./components/PlayerView'))
 const Shelf = lazy(() => import('./components/Shelf'))
+const EndingTree = lazy(() => import('./components/EndingTree'))
 
 /** 弹层加载期间的占位：不遮罩、不闪屏，加载完成后直接出现 */
 function PanelFallback() {
@@ -99,6 +100,7 @@ function MainApp() {
   const [showStats, setShowStats] = useState(false)
   const [lastRun, setLastRun] = useState<DonePayload | null>(null)
   const [showPlayer, setShowPlayer] = useState(false)
+  const [showEndings, setShowEndings] = useState(false)
   const [latestPlan, setLatestPlan] = useState<PlanData | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
@@ -442,7 +444,7 @@ function MainApp() {
   // Esc 的两层语义：有弹层时关弹层（键盘用户不必 Tab 到角落找关闭按钮），
   // 没弹层但正在生成时 = 停止生成（一次等三分钟，想中途叫停不该只能去点按钮）
   const anyPanelOpen =
-    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer
+    immersive || shelfOpen || showTimeline || showDM || showRoles || showRescue || showVersions || showStats || showPlayer || showEndings
   useEffect(() => {
     if (!anyPanelOpen && !streaming) return
     const onKey = (event: KeyboardEvent) => {
@@ -457,6 +459,7 @@ function MainApp() {
         setShowVersions(false)
         setShowStats(false)
         setShowPlayer(false)
+        setShowEndings(false)
         return
       }
       if (streaming) {
@@ -558,6 +561,7 @@ function MainApp() {
                     <button onClick={() => { setToolsOpen(false); setShowRoles(true) }}>🃏 角色速览卡</button>
                     <button onClick={() => { setToolsOpen(false); setShowRescue(true) }}>🆘 救场手册</button>
                     <button onClick={() => { setToolsOpen(false); setShowVersions(true) }}>🕰 版本历史</button>
+                    <button onClick={() => { setToolsOpen(false); setShowEndings(true) }}>🌳 结局分支树</button>
                     <button onClick={() => { setToolsOpen(false); setShowPlayer(true) }}>📖 玩家本（无剧透）</button>
                   </div>
                 )}
@@ -630,6 +634,12 @@ function MainApp() {
       {showRoles && hasPlan && (
         <Suspense fallback={<PanelFallback />}>
           <RoleCards markdown={latestMarkdown} onClose={() => setShowRoles(false)} />
+        </Suspense>
+      )}
+
+      {showEndings && hasPlan && (
+        <Suspense fallback={<PanelFallback />}>
+          <EndingTree plan={playerPlan} onClose={() => setShowEndings(false)} />
         </Suspense>
       )}
 

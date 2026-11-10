@@ -26,6 +26,10 @@ const PLAN = {
   core_trick: { name: '时间错觉', principle: '调快怀表伪造死亡时间' },
   dm_tips: ['开场先强调雪夜封路'],
   hidden_ending: { ending: '白棠其实是被收养的替身' },
+  endings: [
+    { name: '真相大白', condition: '正确指认白棠', clues: 'C1、D1', outcome: '白棠当众承认调换了怀表。' },
+    { name: '替罪羊', condition: '错指沈墨', clues: 'C1、C9', outcome: '沈墨顶罪，白棠离场。' },
+  ],
 }
 
 const RULES = {
@@ -449,4 +453,30 @@ test('会话列表：搜索过滤 + 删除需要点两次', async ({ page }) => 
   await del.click()
   await expect(sidebar.locator('.session-item')).toHaveCount(4)
   await expect(page.getByRole('button', { name: '确认删除会话 血色婚礼' })).toBeVisible()
+})
+
+test('结局分支树：真结局徽章、线索编号 chips、幽灵编号标红', async ({ page }) => {
+  await generatePlan(page)
+  await expect(page.locator('.quality-card')).toBeVisible()
+
+  await page.getByRole('button', { name: /工具/ }).click()
+  await page.getByRole('button', { name: '🌳 结局分支树' }).click()
+
+  const panel = page.getByRole('dialog', { name: '结局分支树' })
+  await expect(panel).toBeVisible()
+  await expect(panel.locator('.ending-root')).toContainText('凶手：白棠')
+
+  // 两条分支，第一条带「真」徽章
+  await expect(panel.locator('.ending-card')).toHaveCount(2)
+  await expect(panel.locator('.ending-card').first()).toHaveClass(/true-ending/)
+  await expect(panel.locator('.ending-true-badge')).toHaveCount(1)
+
+  // 支撑线索 chips：真结局 2 个 + 替罪羊 2 个；其中 C9 不在线索表要标红
+  const chips = panel.locator('.ending-clue-chip')
+  await expect(chips).toHaveCount(4)
+  await expect(panel.locator('.ending-clue-chip.unknown')).toHaveCount(1)
+  await expect(panel.locator('.ending-clue-warn')).toContainText('C9 不在线索表中')
+
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveCount(0)
 })

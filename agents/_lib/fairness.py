@@ -284,6 +284,47 @@ def _check_trick_steps(ctx: dict[str, Any]) -> tuple[float, str]:
 _RED_HERRING_SECTION = re.compile(r"^#{2,3}\s*[^\n]*红鲱鱼[^\n]*\n(.*?)(?=^#{2,3}\s|\Z)", re.M | re.S)
 _CLEAR_WORDS = ("排除", "澄清", "解释", "洗清", "被推翻", "不成立", "对不上")
 
+_ENDING_SECTION_RE = re.compile(r"结局分支")
+# 结局表「支撑线索」列里引用的线索编号：C1 / D2 这类字母+数字形式
+_CLUE_ID_IN_TEXT = re.compile(r"\b([A-Za-z]\d{1,2})\b")
+
+
+def _check_endings_supported(ctx: dict[str, Any]) -> tuple[float, str]:
+    """分支结局的支撑线索必须真实存在于线索表——防止「凭空结局」。
+
+    结局分支是可选章节：旧方案没有它不扣为 fail（0.5 = 可选缺失），
+    但只要写了，每条结局引用的线索编号就必须能在公开/深入线索里找到。
+    """
+    endings = [e for e in ctx["plan"].get("endings") or [] if isinstance(e, dict)]
+    if not endings:
+        if _ENDING_SECTION_RE.search(ctx["markdown"]):
+            return 0.4, "写了「结局分支」小节，但解析不出结构化的结局表"
+        return 0.5, "没有结局分支章节（可选：加了它复盘时能按走向收尾）"
+
+    known_ids = {str(clue.get("id") or "").upper() for _, clue in ctx["clues"] if clue.get("id")}
+    ok = 0
+    missing_examples: list[str] = []
+    for ending in endings:
+        # 编号大小写不敏感：模型写 c1 / C1 都算同一个线索
+        used = {m.upper() for m in _CLUE_ID_IN_TEXT.findall(str(ending.get("clues") or ""))}
+        if not used:
+            continue  # 一条编号都没引用：不算错，但也不加分
+        if used <= known_ids:
+            ok += 1
+        elif len(missing_examples) < 2:
+            missing_examples.append(
+                "、".join(sorted(used - known_ids)) + f"（{ending.get('name') or '未命名结局'}）"
+            )
+
+    if len(endings) < 2:
+        ratio = 0.6 if ok else 0.3
+        return ratio, "只有 1 条结局，算不上「分支」——至少给 1 条真结局 + 1 条走向分支"
+
+    ratio = ok / len(endings)
+    if ratio >= 0.999:
+        return 1.0, f"{len(endings)} 条分支结局的支撑线索都能对上编号"
+    return ratio * 0.8, f"{len(endings) - ok} 条结局引用了线索表里不存在的编号：{'；'.join(missing_examples)}"
+
 
 def _check_red_herring_clear(ctx: dict[str, Any]) -> tuple[float, str]:
     """红鲱鱼必须有排除方式，否则就是纯误导（玩家会觉得被耍）。"""
@@ -326,6 +367,7 @@ _RULES: list[tuple[str, str, str, int, Callable[[dict[str, Any]], tuple[float, s
     ("character_secrets", "角色各有秘密", "warn", 3, _check_character_secrets),
     ("trick_steps", "手法拆解 ≥3 步", "warn", 2, _check_trick_steps),
     ("red_herring_clear", "红鲱鱼可被排除", "warn", 1, _check_red_herring_clear),
+    ("endings_supported", "分支结局有线索支撑", "warn", 4, _check_endings_supported),
 ]
 
 _TOTAL_WEIGHT = sum(rule[3] for rule in _RULES)

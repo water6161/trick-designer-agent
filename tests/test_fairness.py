@@ -82,7 +82,7 @@ class TestScoreBasics:
         plan["timeline"] = [{"time": {"weird": "dict"}, "event": None}]
         report = check_fairness(plan)
         assert isinstance(report["score"], int)
-        assert len(report["checks"]) == 15
+        assert len(report["checks"]) == 16  # 15 条基础规则 + endings_supported
 
 
 class TestErrorRules:
@@ -242,3 +242,55 @@ class TestSummaryLine:
         plan["culprit"]["character"] = "不存在的人"
         line = summary_line(check_fairness(plan))
         assert "凶手在角色表内" in line
+
+class TestEndingsSupported:
+    """分支结局的支撑线索必须真实存在于线索表。"""
+
+    def test_两条结局且编号全部有效(self):
+        plan = base_plan()
+        plan["endings"] = [
+            {"name": "真相大白", "condition": "指认林昭", "clues": "C1、C2、D1", "outcome": "林昭伏法"},
+            {"name": "替罪羊", "condition": "错指沈青", "clues": "C1", "outcome": "沈青顶罪"},
+        ]
+        check = get_check(check_fairness(plan), "endings_supported")
+        assert check["status"] == "pass"
+        assert "2 条" in check["detail"]
+
+    def test_引用了不存在的编号(self):
+        plan = base_plan()
+        plan["endings"] = [
+            {"name": "真相大白", "clues": "C1", "outcome": "伏法"},
+            {"name": "替罪羊", "clues": "C99", "outcome": "顶罪"},
+        ]
+        check = get_check(check_fairness(plan), "endings_supported")
+        assert check["status"] == "fail"
+        assert "C99" in check["detail"]
+
+    def test_只有一条结局不算分支(self):
+        plan = base_plan()
+        plan["endings"] = [{"name": "真相大白", "clues": "C1", "outcome": "伏法"}]
+        check = get_check(check_fairness(plan), "endings_supported")
+        # warn 级 + 拿了一半分：算待完善而不是硬伤，但要点名「不算分支」
+        assert check["status"] == "partial"
+        assert "分支" in check["detail"]
+
+    def test_没有结局章节按可选缺失处理(self):
+        check = get_check(check_fairness(base_plan()), "endings_supported")
+        assert check["status"] == "partial"  # 0.5 = 及格线上，可选章节不阻断
+        assert "可选" in check["detail"]
+
+    def test_写了章节但解析不出表(self):
+        plan = base_plan()
+        plan["endings"] = []
+        check = get_check(check_fairness(plan, "### 结局分支\n\n（此处只有一句话，没有表格）"), "endings_supported")
+        assert check["status"] == "fail"
+        assert "解析不出" in check["detail"]
+
+    def test_编号大小写不敏感地匹配(self):
+        plan = base_plan()
+        plan["endings"] = [
+            {"name": "A", "clues": "c1、d1", "outcome": "x"},
+            {"name": "B", "clues": "C2", "outcome": "y"},
+        ]
+        check = get_check(check_fairness(plan), "endings_supported")
+        assert check["status"] == "pass"

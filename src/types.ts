@@ -52,6 +52,13 @@ export interface PlanCharacter {
   suspicion?: string
 }
 
+export interface PlanEnding {
+  name?: string
+  condition?: string
+  clues?: string
+  outcome?: string
+}
+
 export interface PlanData {
   title?: string
   clues_public?: ClueData[]
@@ -60,6 +67,8 @@ export interface PlanData {
   timeline?: TimelineEvent[]
   culprit?: { character?: string; motive?: string } | null
   hidden_ending?: { scene?: string; ending?: string } | null
+  /** 分支结局：1 条真结局 + 1~2 条走向分支；每条的 clues 引用线索编号（C1/D2） */
+  endings?: PlanEnding[] | null
   [key: string]: unknown
 }
 

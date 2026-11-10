@@ -160,3 +160,40 @@ class TestParse:
     def test_分段生成的省略标题也能解析凶手(self):
         md = "### 凶手\n\n凶手：沈青\n动机：争夺遗产\n"
         assert parse_plan_from_markdown(md)["culprit"]["character"] == "沈青"
+
+class TestEndings:
+    """「### 结局分支」小节 → plan["endings"]。"""
+
+    def test_解析结局分支表(self):
+        md = (
+            "### 结局分支\n\n"
+            "| 结局 | 触发条件 | 支撑线索 | 走向 |\n"
+            "|---|---|---|---|\n"
+            "| 真相大白 | 正确指认白棠 | C1、D1 | 白棠伏法 |\n"
+            "| 替罪羊 | 错指沈墨 | C1 | 沈墨顶罪 |\n"
+        )
+        endings = parse_plan_from_markdown(md)["endings"]
+        assert len(endings) == 2
+        assert endings[0] == {
+            "name": "真相大白", "condition": "正确指认白棠", "clues": "C1、D1", "outcome": "白棠伏法",
+        }
+        assert endings[1]["name"] == "替罪羊"
+
+    def test_旧式表头也能解析(self):
+        md = (
+            "### 结局分支\n\n"
+            "| 结局名 | 达成条件 | 线索 | 结局走向 |\n"
+            "|---|---|---|---|\n"
+            "| 沉默 | 全员隐瞒 | D2 | 案件成为悬案 |\n"
+        )
+        endings = parse_plan_from_markdown(md)["endings"]
+        assert endings[0]["condition"] == "全员隐瞒"
+        assert endings[0]["outcome"] == "案件成为悬案"
+
+    def test_没有结局章节时不产出字段(self):
+        plan = parse_plan_from_markdown("# 《只有线索》\n\n## 五、线索清单\n\n| 编号 |\n|---|\n| C1 |\n")
+        assert "endings" not in plan
+
+    def test_结局章节为空表时不产出字段(self):
+        md = "### 结局分支\n\n| 结局 | 触发条件 | 支撑线索 | 走向 |\n|---|---|---|---|\n"
+        assert "endings" not in parse_plan_from_markdown(md)
