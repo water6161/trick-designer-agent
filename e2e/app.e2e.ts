@@ -171,7 +171,7 @@ const OLD_MARKDOWN = `# 《雪落无声的第七夜》
 暴雪封山第四天，山庄与外界断联。旧版到这里就结束了。
 `
 
-async function mockAgent(page: Page): Promise<void> {
+async function mockAgent(page: Page, options: { chatDelayMs?: number } = {}): Promise<void> {
   await page.route('**/trick-designer', async (route) => {
     let action = ''
     try {
@@ -182,6 +182,8 @@ async function mockAgent(page: Page): Promise<void> {
     if (action === 'sessions') return route.fulfill({ json: { sessions: [] } })
     if (action === 'history') return route.fulfill({ json: { messages: [] } })
     if (action === 'chat') {
+      // 模拟慢生成：响应头迟迟不回，验证界面不会「看起来卡死」
+      if (options.chatDelayMs) await new Promise((resolve) => setTimeout(resolve, options.chatDelayMs))
       return route.fulfill({
         status: 200,
         headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache' },
@@ -208,8 +210,8 @@ async function mockAgent(page: Page): Promise<void> {
   // 静态资源照常走网络，只拦业务接口；其余请求交给 vite
 }
 
-async function generatePlan(page: Page): Promise<void> {
-  await mockAgent(page)
+async function generatePlan(page: Page, options: { chatDelayMs?: number } = {}): Promise<void> {
+  await mockAgent(page, options)
   await page.goto('/')
   const input = page.locator('textarea').first()
   await expect(input).toBeVisible()
@@ -233,6 +235,21 @@ test('生成链路：SSE 流式渲染 → 质量体检卡 → 硬规则校验卡
 
   // 本次耗时条（traceId 来自 done 事件）
   await expect(page.locator('.run-meta')).toContainText('trace-e2e-001')
+})
+
+test('慢生成不会像卡死：进度条旁给出已用时间与预计剩余', async ({ page }) => {
+  // 模拟后端 2.5 秒才吐出响应头（真实场景里 design 一段能停 60 秒）
+  await generatePlan(page, { chatDelayMs: 2500 })
+
+  // 等待响应期间就要有计时，而不是干等一个不动的阶段点
+  await expect(page.locator('.stage-meta')).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('.stage-meta')).toContainText('已用')
+  await expect(page.locator('.stage-meta')).toContainText(/预计还需|比预计慢/)
+  // 阶段说明告诉用户当前在做什么
+  await expect(page.locator('.stage-hint')).not.toBeEmpty()
+
+  // 生成结束后进度与计时一起收起
+  await expect(page.locator('.stage-progress-wrap')).toHaveCount(0, { timeout: 30_000 })
 })
 
 test('玩家本：敏感信息在 DOM 里根本不存在，角色本才回传本人秘密', async ({ page }) => {

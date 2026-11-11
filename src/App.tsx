@@ -91,6 +91,10 @@ function MainApp() {
   const [notice, setNotice] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [stage, setStage] = useState('')
+  // 本次生成的开始时间与模式：给「已用 / 预计还需」提供基准
+  const [runMeta, setRunMeta] = useState<{ startedAt: number; speed: boolean } | null>(null)
+  // 需求构造器里的极速开关：主输入框直接发送时也要沿用它
+  const [speedMode, setSpeedMode] = useState(false)
   const [hydrating, setHydrating] = useState(true)
   const [hydratingHistory, setHydratingHistory] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -243,6 +247,8 @@ function MainApp() {
   ) => {
     setStreaming(true)
     setStatus(useRetry ? '正在从断点恢复' : '正在连接诡计工作台')
+    // 极速模式：正文里的标记最权威，其次看构造器当前开关（主输入框直接发送时没有标记）
+    setRunMeta({ startedAt: Date.now(), speed: (messageText ?? '').includes('【极速模式】') || speedMode })
     stickRef.current = true
     // 是否已收到 done：决定「流结束但没 done」是断流还是正常收尾
     let gotDone = false
@@ -845,7 +851,13 @@ function MainApp() {
         </button>
       )}
 
-        {streaming && <StageProgress stage={stage} />}
+        {streaming && (
+          <StageProgress
+            stage={stage}
+            startedAt={runMeta?.startedAt ?? Date.now()}
+            speed={runMeta?.speed ?? false}
+          />
+        )}
 
         <ExportBar conversationId={activeId} hasPlan={hasPlan && !streaming} disabled={loading} />
 
@@ -854,6 +866,7 @@ function MainApp() {
             onSend={(text) => void send(text)}
             hasPlan={hasPlan}
             disabled={loading}
+            onSpeedChange={setSpeedMode}
           />
         )}
 

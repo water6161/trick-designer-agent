@@ -4,6 +4,8 @@ interface Props {
   onSend: (message: string) => void
   hasPlan: boolean
   disabled: boolean
+  /** 极速开关状态回传：主输入框直接发送时也要用它选耗时基准 */
+  onSpeedChange?: (speed: boolean) => void
 }
 
 const GENRES = ['本格', '变格', '民国', '古风', '现代', '科幻', '情感']
@@ -55,10 +57,14 @@ function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)]
 }
 
-export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props) {
+export default function RequirementBuilder({ onSend, hasPlan, disabled, onSpeedChange }: Props) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<BuilderState>(loadSaved)
   const [special, setSpecial] = useState('')
+
+  useEffect(() => {
+    onSpeedChange?.(state.speed)
+  }, [state.speed, onSpeedChange])
 
   useEffect(() => {
     try {
