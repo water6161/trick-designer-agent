@@ -849,7 +849,8 @@ async def score(
         logger.log("score skipped in speed mode")
         return {"quality": {}}
 
-    model = get_model(env, "answer")
+    # 评分是辅助功能：用 fast 模型换速度，实测 10s+ → 3s 内，且不占用设计模型配额
+    model = get_model(env, "fast")
     messages = [
         SystemMessage(content=AUDIT_SYSTEM),
         HumanMessage(content=markdown[:16000]),
