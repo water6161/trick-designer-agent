@@ -181,7 +181,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled }: Props)
               className={`req-chip ${state.speed ? 'active' : ''}`}
               onClick={() => setState((prev) => ({ ...prev, speed: !prev.speed }))}
               disabled={disabled}
-              title="极速模式：跳过联网检索、一次生成骨架，约 30 秒出主线 7 节（标题/速览/背景/诡计/凶手/线索/时间线）；需要自查与分支结局请关闭"
+              title="极速模式：跳过联网检索与质量自查，一次生成骨架，约 15 秒出主线 7 节（标题/速览/背景/诡计/凶手/线索/时间线）；需要自查与分支结局请关闭"
             >
               ⚡ 极速模式 {state.speed ? '开' : '关'}
             </button>
