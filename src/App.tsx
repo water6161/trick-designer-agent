@@ -93,8 +93,16 @@ function MainApp() {
   const [stage, setStage] = useState('')
   // 本次生成的开始时间与模式：给「已用 / 预计还需」提供基准
   const [runMeta, setRunMeta] = useState<{ startedAt: number; speed: boolean } | null>(null)
-  // 需求构造器里的极速开关：主输入框直接发送时也要沿用它
-  const [speedMode, setSpeedMode] = useState(false)
+  // 极速开关：全应用唯一状态——主输入框与需求构造器共用
+  const [speedMode, setSpeedMode] = useState(() => {
+    // 迁移旧版存于构造器 localStorage 里的开关状态
+    try {
+      const saved = JSON.parse(localStorage.getItem('trick-designer-req-builder') || '{}')
+      return saved.speed === true
+    } catch {
+      return false
+    }
+  })
   const [hydrating, setHydrating] = useState(true)
   const [hydratingHistory, setHydratingHistory] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -370,7 +378,9 @@ function MainApp() {
   }
 
   const send = async (raw?: string) => {
-    const text = (raw ?? input).trim()
+    // 主输入框发送时按开关拼极速标记（构造器路径已在正文里自带标记）
+    const base = raw ?? input
+    const text = (!raw && speedMode && !base.includes('【极速模式】') ? `【极速模式】${base}` : base).trim()
     if (!text || streaming || hydrating) return
 
     const userMessage: ChatMessageType = {
@@ -866,6 +876,7 @@ function MainApp() {
             onSend={(text) => void send(text)}
             hasPlan={hasPlan}
             disabled={loading}
+            speed={speedMode}
             onSpeedChange={setSpeedMode}
           />
         )}
@@ -953,6 +964,8 @@ function MainApp() {
           onStop={handleStop}
           streaming={streaming}
           disabled={loading}
+          speedMode={speedMode}
+          onToggleSpeed={() => setSpeedMode((s) => !s)}
         />
       </main>
     </div>

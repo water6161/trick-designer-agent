@@ -8,9 +8,27 @@ interface Props {
   onStop: () => void
   streaming: boolean
   disabled: boolean
+  /** 极速开关：与需求构造器共用同一状态（提升到 App） */
+  speedMode?: boolean
+  onToggleSpeed?: () => void
 }
 
-export default function Composer({ value, onChange, onSend, onStop, streaming, disabled }: Props) {
+/** 输入框下方提示文案：流式中教停止，平时按模式给耗时预期 */
+export function composerHint(streaming: boolean, speedMode: boolean): string {
+  if (streaming) return 'Esc 可停止生成'
+  return speedMode ? '⚡ 约 15 秒出主线 · Enter 发送' : '完整模式约 1 分半 · Enter 发送'
+}
+
+export default function Composer({
+  value,
+  onChange,
+  onSend,
+  onStop,
+  streaming,
+  disabled,
+  speedMode = false,
+  onToggleSpeed,
+}: Props) {
   const areaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -45,9 +63,19 @@ export default function Composer({ value, onChange, onSend, onStop, streaming, d
           }}
         />
         <div className="composer-actions">
-          <span className="composer-hint">
-            {streaming ? 'Esc 可停止生成' : 'Enter 发送 · Shift + Enter 换行'}
-          </span>
+          {onToggleSpeed && !streaming && (
+            <button
+              type="button"
+              className={`composer-speed ${speedMode ? 'active' : ''}`}
+              onClick={onToggleSpeed}
+              disabled={disabled}
+              aria-pressed={speedMode}
+              title="极速模式：跳过联网检索与质量自查，约 15 秒出主线骨架（标题/凶手/线索/时间线）；需要完整方案与分支结局请关闭"
+            >
+              ⚡ 极速 {speedMode ? '开' : '关'}
+            </button>
+          )}
+          <span className="composer-hint">{composerHint(streaming, speedMode)}</span>
           {streaming ? (
             <button className="stop-btn" onClick={onStop} aria-label="停止生成">
               <StopIcon />

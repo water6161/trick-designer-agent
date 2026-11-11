@@ -124,6 +124,18 @@ export default function Welcome({ onPick }: Props) {
               告诉我题材、人数、难度与想要的诡计类型。我会检索经典套路与玩家雷点，输出完整诡计方案，
               并自动做公平性自查——线索够不够锁凶、有没有强行降智、还有哪些解释没被排除。
             </p>
+            {/* 三步上手：新用户最常见的三个疑问——怎么开始、卡片点了会怎样、怎么快 */}
+            <ol className="dossier-steps" aria-label="三步上手">
+              <li>
+                <b>直接打字</b>说需求（题材、人数、难度），回车发送
+              </li>
+              <li>
+                点下面的<b>案件卡</b>，立即以此立案生成
+              </li>
+              <li>
+                赶时间？打开输入框旁的 <b>⚡ 极速</b>，约 15 秒出主线
+              </li>
+            </ol>
           </div>
         </header>
 
@@ -144,7 +156,7 @@ export default function Welcome({ onPick }: Props) {
               <strong>{preset.title}</strong>
               <span className="dossier-card-desc">{preset.desc}</span>
               <span className="dossier-card-go" aria-hidden="true">
-                调阅 →
+                点击直接立案 →
               </span>
             </button>
           ))}

@@ -894,6 +894,46 @@ button:disabled,
   line-height: 1.9;
 }
 
+/* 三步上手指引：编号用金色圆点，整行紧凑不抢标题视觉 */
+.dossier-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.dossier-steps li {
+  counter-increment: step;
+  position: relative;
+  padding-left: 26px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.dossier-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(216, 178, 106, 0.45);
+  color: rgba(216, 178, 106, 0.9);
+  font-size: 10px;
+}
+
+.dossier-steps b {
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .dossier-rule {
   display: flex;
   align-items: center;
@@ -1221,6 +1261,36 @@ button:disabled,
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: rgba(133, 139, 152, 0.8);
+}
+
+/* 主输入框的极速开关：与需求构造器里 req-chip 同风格 */
+.composer-speed {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 178, 106, 0.3);
+  background: transparent;
+  color: rgba(216, 178, 106, 0.75);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.composer-speed:hover:not(:disabled) {
+  border-color: rgba(216, 178, 106, 0.6);
+  color: var(--gold);
+}
+
+.composer-speed.active {
+  border-color: rgba(216, 178, 106, 0.7);
+  background: var(--gold-soft);
+  color: var(--gold-strong);
+}
+
+.composer-speed:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .send-btn {

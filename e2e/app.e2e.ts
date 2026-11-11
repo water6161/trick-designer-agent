@@ -598,6 +598,45 @@ test('极速模式：开关打开后，发出去的需求带骨架指令而不�
   expect(chatBodies[0]).not.toContain('请给一套完整方案')
 })
 
+test('新手引导：首屏三步指引 + 案件卡点击直接立案 + 输入框旁极速开关真实生效', async ({ page }) => {
+  await mockAgent(page)
+  const chatBodies: string[] = []
+  page.on('request', (request) => {
+    const body = request.postData() || ''
+    if (request.url().includes('trick-designer') && body.includes('"chat"')) chatBodies.push(body)
+  })
+
+  await page.goto('/')
+
+  // 首屏有「三步上手」指引，案件卡行动文案说清楚点击会发生什么
+  const steps = page.getByLabel('三步上手')
+  await expect(steps).toBeVisible()
+  await expect(steps).toContainText('直接打字')
+  await expect(steps).toContainText('案件卡')
+  await expect(steps).toContainText('⚡ 极速')
+  await expect(page.locator('.dossier-card-go').first()).toHaveText('点击直接立案 →')
+
+  // 输入框旁的极速开关默认关，提示完整模式耗时
+  const speedToggle = page.getByRole('button', { name: '⚡ 极速 关' })
+  await expect(speedToggle).toBeVisible()
+
+  // 打开开关 → 提示换成极速口径 → 与构造器共用同一状态（发送前验证互相可见）
+  await speedToggle.click()
+  const openToggle = page.getByRole('button', { name: '⚡ 极速 开' })
+  await expect(openToggle).toBeVisible()
+  await expect(openToggle).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: /需求构造器/ }).click()
+  await expect(page.getByRole('button', { name: /极速模式 开/ })).toBeVisible()
+  await page.keyboard.press('Escape')
+
+  // 主输入框发送自动带上【极速模式】标记
+  await page.locator('#composer-input').fill('题材：民国；5人；想要毒杀诡计')
+  await page.getByRole('button', { name: '发送' }).click()
+  await expect.poll(() => chatBodies.length).toBeGreaterThan(0)
+  expect(chatBodies[0]).toContain('【极速模式】')
+  expect(chatBodies[0]).toContain('民国')
+})
+
 test('数据备份：书架一键导出 JSON，再从文件恢复回来', async ({ page }) => {
   // 移除走 window.confirm，Playwright 默认会 dismiss——这里显式接受
   page.on('dialog', (dialog) => void dialog.accept())

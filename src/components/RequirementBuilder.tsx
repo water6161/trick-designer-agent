@@ -4,8 +4,9 @@ interface Props {
   onSend: (message: string) => void
   hasPlan: boolean
   disabled: boolean
-  /** 极速开关状态回传：主输入框直接发送时也要用它选耗时基准 */
-  onSpeedChange?: (speed: boolean) => void
+  /** 极速开关：状态提升到 App，与主输入框旁的开关同源 */
+  speed: boolean
+  onSpeedChange: (speed: boolean) => void
 }
 
 const GENRES = ['本格', '变格', '民国', '古风', '现代', '科幻', '情感']
@@ -30,7 +31,6 @@ interface BuilderState {
   difficulty: string
   tricks: string[]
   mood: string
-  speed: boolean
 }
 
 function loadSaved(): BuilderState {
@@ -44,27 +44,22 @@ function loadSaved(): BuilderState {
         difficulty: typeof parsed.difficulty === 'string' ? parsed.difficulty : '',
         tricks: Array.isArray(parsed.tricks) ? parsed.tricks.filter((t) => typeof t === 'string') : [],
         mood: typeof parsed.mood === 'string' ? parsed.mood : '',
-        speed: parsed.speed === true,
       }
     }
   } catch {
     // 忽略损坏的本地数据
   }
-  return { genre: '', players: '', difficulty: '', tricks: [], mood: '', speed: false }
+  return { genre: '', players: '', difficulty: '', tricks: [], mood: '' }
 }
 
 function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)]
 }
 
-export default function RequirementBuilder({ onSend, hasPlan, disabled, onSpeedChange }: Props) {
+export default function RequirementBuilder({ onSend, hasPlan, disabled, speed, onSpeedChange }: Props) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<BuilderState>(loadSaved)
   const [special, setSpecial] = useState('')
-
-  useEffect(() => {
-    onSpeedChange?.(state.speed)
-  }, [state.speed, onSpeedChange])
 
   useEffect(() => {
     try {
@@ -76,7 +71,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled, onSpeedC
 
   const message = useMemo(() => {
     const parts: string[] = []
-    if (state.speed) parts.push('【极速模式】')
+    if (speed) parts.push('【极速模式】')
     if (state.genre) parts.push(`题材：${state.genre}`)
     if (state.players) parts.push(`人数：${state.players}`)
     if (state.difficulty) parts.push(`难度：${state.difficulty}`)
@@ -84,7 +79,7 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled, onSpeedC
     const specialText = [state.mood, special].filter(Boolean).join('，')
     if (specialText) parts.push(`特殊设定：${specialText}`)
     return parts.join('；')
-  }, [state, special])
+  }, [state, special, speed])
 
   const canBuild = message.length > 0
 
@@ -184,19 +179,19 @@ export default function RequirementBuilder({ onSend, hasPlan, disabled, onSpeedC
             <span className="req-preview">{canBuild ? message : '选择任意条件后即可生成'}</span>
             <button
               type="button"
-              className={`req-chip ${state.speed ? 'active' : ''}`}
-              onClick={() => setState((prev) => ({ ...prev, speed: !prev.speed }))}
+              className={`req-chip ${speed ? 'active' : ''}`}
+              onClick={() => onSpeedChange(!speed)}
               disabled={disabled}
               title="极速模式：跳过联网检索与质量自查，一次生成骨架，约 15 秒出主线 7 节（标题/速览/背景/诡计/凶手/线索/时间线）；需要自查与分支结局请关闭"
             >
-              ⚡ 极速模式 {state.speed ? '开' : '关'}
+              ⚡ 极速模式 {speed ? '开' : '关'}
             </button>
             <button
               type="button"
               className="req-generate"
               disabled={!canBuild || disabled}
               onClick={() => {
-                onSend(state.speed ? `${message}。请先给一套骨架方案，只写主线。` : `${message}。请给一套完整方案。`)
+                onSend(speed ? `${message}。请先给一套骨架方案，只写主线。` : `${message}。请给一套完整方案。`)
                 setOpen(false)
               }}
             >
