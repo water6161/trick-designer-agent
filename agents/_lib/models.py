@@ -20,6 +20,10 @@ def _extra_body(model: str) -> dict[str, Any] | None:
     """
     if model.startswith("@makers/") and "deepseek" in model.lower():
         return {"thinking": {"type": "disabled"}}
+    # DashScope 混合思考模型（qwen-plus 等）：思考默认开启，关闭后全管线提速约 1/3，
+    # 也减少结构化调用返回空内容的概率；非思考模型会忽略该参数。
+    if "qwen" in model.lower():
+        return {"enable_thinking": False}
     return None
 
 
