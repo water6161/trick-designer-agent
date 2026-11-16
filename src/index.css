@@ -2874,6 +2874,16 @@ button:disabled,
 .tools-dropdown button:hover { background: #1d2130; color: #e8d9ae; }
 
 .export-more { position: relative; display: inline-block; }
+.export-ai { position: relative; display: inline-block; }
+.export-ai-btn { border-color: rgba(216, 178, 106, 0.5) !important; color: var(--gold-strong) !important; }
+/* 画风菜单项多，限高滚动，避免超出视口底部 */
+.export-ai-menu { max-height: 60vh; overflow-y: auto; min-width: 190px; }
+.export-menu-sep {
+  padding: 8px 14px 4px;
+  color: rgba(154, 143, 112, 0.75);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
 .export-menu {
   position: absolute;
   top: calc(100% + 8px);

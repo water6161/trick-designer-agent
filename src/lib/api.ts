@@ -213,20 +213,48 @@ export interface ExportPlan {
 
 export type AICoverStyle = 'character' | 'group' | 'scene'
 
+/** 画风：观感差异最大的维度。key 必须与后端 cover.py 的 _MEDIA 一致。 */
+export type AICoverMedia =
+  | 'cine'
+  | 'hk90'
+  | 'noir'
+  | 'ukiyoe'
+  | 'ink'
+  | 'papercut'
+  | 'cyberpunk'
+  | 'oil'
+  | 'screenprint'
+  | 'wetplate'
+
+export const AI_COVER_MEDIA: { key: AICoverMedia; label: string }[] = [
+  { key: 'cine', label: '电影剧照' },
+  { key: 'hk90', label: '九十年代港片' },
+  { key: 'noir', label: '黑白黑色电影' },
+  { key: 'ukiyoe', label: '浮世绘' },
+  { key: 'ink', label: '水墨写意' },
+  { key: 'papercut', label: '剪纸拼贴' },
+  { key: 'cyberpunk', label: '赛博朋克' },
+  { key: 'oil', label: '古典油画' },
+  { key: 'screenprint', label: '双色丝网印' },
+  { key: 'wetplate', label: '湿版老照片' },
+]
+
 /**
  * 生成 AI 封面插画。
  * nonce 是「换图凭据」：每次传新值就出一张新构图，传同值可复现同一张；
  * 留空时后端自己随机，结果同样是每次不同。
+ * media 指定画风；留空时按 nonce 从画风池随机（每次点都是不同画种）。
  */
 export async function aiCover(
   conversationId: string,
   style: AICoverStyle = 'character',
   nonce = '',
-): Promise<{ image: string; title: string; nonce: string }> {
+  media?: AICoverMedia,
+): Promise<{ image: string; title: string; nonce: string; mediaLabel: string }> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',
     headers: headers(conversationId),
-    body: JSON.stringify({ action: 'ai_cover', cover_style: style, nonce }),
+    body: JSON.stringify({ action: 'ai_cover', cover_style: style, nonce, media: media ?? '' }),
   })
   const data = (await readJson(response)) as Record<string, unknown>
   if (data.error) throw new Error(String(data.error))
@@ -237,6 +265,7 @@ export async function aiCover(
     image: data.image,
     title: typeof data.title === 'string' ? data.title : '未命名诡计方案',
     nonce: typeof data.nonce === 'string' ? data.nonce : nonce,
+    mediaLabel: typeof data.media_label === 'string' ? data.media_label : '',
   }
 }
 

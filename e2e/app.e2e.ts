@@ -191,6 +191,18 @@ async function mockAgent(page: Page, options: { chatDelayMs?: number } = {}): Pr
       })
     }
     if (action === 'export') return route.fulfill({ json: { title: PLAN.title, plan: PLAN, markdown: MARKDOWN } })
+    if (action === 'ai_cover') {
+      // 1x1 PNG：足够让前端拿到合法 data URL 走完合成流程
+      return route.fulfill({
+        json: {
+          image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+          title: PLAN.title,
+          nonce: 'e2e-nonce',
+          media: 'cine',
+          media_label: '电影剧照',
+        },
+      })
+    }
     if (action === 'versions') {
       return route.fulfill({
         json: {
@@ -352,6 +364,18 @@ test('断流兜底：首次连接失败自动重连，用户不用重写需求',
       })
     }
     if (action === 'export') return route.fulfill({ json: { title: PLAN.title, plan: PLAN, markdown: MARKDOWN } })
+    if (action === 'ai_cover') {
+      // 1x1 PNG：足够让前端拿到合法 data URL 走完合成流程
+      return route.fulfill({
+        json: {
+          image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+          title: PLAN.title,
+          nonce: 'e2e-nonce',
+          media: 'cine',
+          media_label: '电影剧照',
+        },
+      })
+    }
     return route.fulfill({ json: {} })
   })
 
@@ -653,6 +677,30 @@ test('新手引导：首屏三步指引 + 案件卡点击直接立案 + 输入�
   await expect.poll(() => chatBodies.length).toBeGreaterThan(0)
   expect(chatBodies[0]).toContain('【极速模式】')
   expect(chatBodies[0]).toContain('民国')
+})
+
+test('AI 封面画风：菜单有随机与十种画种，选中的画风真的进请求体', async ({ page }) => {
+  const coverBodies: string[] = []
+  page.on('request', (request) => {
+    const body = request.postData() || ''
+    if (request.url().includes('trick-designer') && body.includes('"ai_cover"')) coverBodies.push(body)
+  })
+  await generatePlan(page)
+
+  // 打开画风菜单：随机项 + 分组标题 + 十种画种
+  await page.getByRole('button', { name: /AI 封面/ }).click()
+  await expect(page.getByRole('button', { name: '🎲 随机画风（每次不同）' })).toBeVisible()
+  await expect(page.locator('.export-ai-menu .export-menu-sep')).toHaveText('指定画风')
+  const mediaButtons = page.locator('.export-ai-menu button').filter({ hasNotText: '随机画风' })
+  await expect(mediaButtons).toHaveCount(10)
+
+  // 指定「浮世绘」→ 请求体必须带 media=ukiyoe，同时仍有 nonce（换一张凭据）
+  await page.getByRole('button', { name: '浮世绘', exact: true }).click()
+  await expect.poll(() => coverBodies.length).toBeGreaterThan(0)
+  const body = JSON.parse(coverBodies[0]) as { media?: string; nonce?: string; cover_style?: string }
+  expect(body.media).toBe('ukiyoe')
+  expect(body.nonce).toBeTruthy()
+  expect(body.cover_style).toBeTruthy()
 })
 
 test('数据备份：书架一键导出 JSON，再从文件恢复回来', async ({ page }) => {

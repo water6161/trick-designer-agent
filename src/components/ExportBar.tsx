@@ -3,7 +3,7 @@ import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
 import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
 import { printPlan } from '../lib/printPlan'
-import { aiCover, type AICoverStyle } from '../lib/api'
+import { aiCover, AI_COVER_MEDIA, type AICoverMedia, type AICoverStyle } from '../lib/api'
 
 const AI_COVER_STYLES: { key: AICoverStyle; label: string }[] = [
   { key: 'character', label: '人物海报' },
@@ -47,15 +47,15 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     </button>
   )
 
-  const runCover = async (task: (plan: ExportPlan) => Promise<void> | void) => {
+  const runCover = async (task: (plan: ExportPlan) => Promise<string | void>) => {
     if (busy || disabled) return
     setBusy(true)
     setMessage('AI 封面约需 30~60 秒…')
     try {
       const plan = await exportPlan(conversationId)
-      await task(plan)
+      const mediaLabel = await task(plan)
       // 每次点都是新图，明确告诉用户还能继续点
-      setMessage('已生成 · 再点一次换一张')
+      setMessage(mediaLabel ? `已生成 · ${mediaLabel} · 再点换一张` : '已生成 · 再点一次换一张')
     } catch (err) {
       setMessage(err instanceof Error ? err.message : '生成失败，请重试。')
     } finally {
@@ -65,17 +65,39 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
   }
 
   const [moreOpen, setMoreOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
+
+  /** 生成 AI 封面：media 不传则后端按 nonce 随机画风 */
+  const genCover = async (media?: AICoverMedia) => {
+    setAiOpen(false)
+    await runCover(async (plan) => {
+      const style = AI_COVER_STYLES[aiIdx].key
+      // 每次点都是新构图：nonce 变 → 后端 seed、画风、机位、光源、色调一起变
+      const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      const { image, mediaLabel } = await aiCover(conversationId, style, nonce, media)
+      downloadAICoverPNG(image, {
+        title: plan.title,
+        genre: plan.brief?.genre,
+        players: plan.brief?.players,
+        difficulty: plan.brief?.difficulty,
+        lockScore: plan.lockScore,
+      })
+      setAiIdx((i) => (i + 1) % AI_COVER_STYLES.length)
+      return mediaLabel
+    })
+  }
 
   // 点击下拉外部时关闭
   useEffect(() => {
-    if (!moreOpen) return
+    if (!moreOpen && !aiOpen) return
     const onDoc = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest('.export-more')) setMoreOpen(false)
+      if (moreOpen && !target.closest('.export-more')) setMoreOpen(false)
+      if (aiOpen && !target.closest('.export-ai')) setAiOpen(false)
     }
     document.addEventListener('click', onDoc)
     return () => document.removeEventListener('click', onDoc)
-  }, [moreOpen])
+  }, [moreOpen, aiOpen])
 
   // 注意：early return 必须放在所有 hooks 之后，否则 hasPlan 变化时 hooks 数量不一致会导致 React 崩溃（error #310）
   if (!hasPlan) return null
@@ -85,6 +107,29 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
       <span className="export-label">开本稿</span>
       {btn('复制全文', () => void run((plan) => { void copyText(plan.markdown) }), 'copy')}
       {btn('下载 Word', () => void run(async (plan) => { const d = await loadDocx(); await d.downloadDocx(plan.markdown, { title: plan.title, lockScore: plan.lockScore }) }), 'docx')}
+      <div className="export-ai">
+        <button
+          className="export-btn export-ai-btn"
+          onClick={() => setAiOpen((v) => !v)}
+          disabled={busy || disabled}
+          title="AI 封面：默认随机画风（每次点都是不同画种），也可指定画风"
+        >
+          ✨ AI 封面 {aiOpen ? '▴' : '▾'}
+        </button>
+        {aiOpen && (
+          <div className="export-menu export-ai-menu">
+            <button className="export-menu-ai" onClick={() => void genCover()}>
+              🎲 随机画风（每次不同）
+            </button>
+            <span className="export-menu-sep">指定画风</span>
+            {AI_COVER_MEDIA.map((media) => (
+              <button key={media.key} onClick={() => void genCover(media.key)}>
+                {media.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="export-more">
         <button className="export-btn" onClick={() => setMoreOpen((v) => !v)} disabled={busy || disabled}>
           更多导出 {moreOpen ? '▴' : '▾'}
@@ -120,25 +165,6 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
               void result
             }}>
               封面·{COVER_STYLES[coverIdx].label}
-            </button>
-            <button className="export-menu-ai" onClick={() => {
-              setMoreOpen(false)
-              void runCover(async (plan) => {
-                const style = AI_COVER_STYLES[aiIdx].key
-                // 每次点都是新构图：nonce 变 → 后端 seed 与机位/光源/色调一起变
-                const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-                const { image } = await aiCover(conversationId, style, nonce)
-                downloadAICoverPNG(image, {
-                  title: plan.title,
-                  genre: plan.brief?.genre,
-                  players: plan.brief?.players,
-                  difficulty: plan.brief?.difficulty,
-                  lockScore: plan.lockScore,
-                })
-                setAiIdx((i) => (i + 1) % AI_COVER_STYLES.length)
-              })
-            }}>
-              ✨ AI 封面·{AI_COVER_STYLES[aiIdx].label}
             </button>
           </div>
         )}
