@@ -237,6 +237,24 @@ test('生成链路：SSE 流式渲染 → 质量体检卡 → 硬规则校验卡
   await expect(page.locator('.run-meta')).toContainText('trace-e2e-001')
 })
 
+test('工具菜单全部可点：真实指针路径点击 7 个工具，弹层都出现（层级回归）', async ({ page }) => {
+  await generatePlan(page)
+
+  const toolsBtn = page.locator('button').filter({ hasText: /工具/ }).first()
+  // 菜单下半部分曾被聊天内容盖住拦截点击（topbar backdrop-filter 层叠上下文），用真实点击防回归
+  const names = ['DM 主持台', '证据链时间线', '角色速览卡', '救场手册', '版本历史', '结局分支树', '玩家本']
+  for (const name of names) {
+    await toolsBtn.click()
+    const btn = page.locator('.tools-dropdown button').filter({ hasText: name }).first()
+    await btn.click({ timeout: 5_000 })
+    // 弹层组件是 lazy 加载的，用轮询等它出现
+    const overlay = page.locator('.modal-overlay').first()
+    await expect(overlay).toBeVisible({ timeout: 8_000 })
+    await page.keyboard.press('Escape')
+    await expect(overlay).toHaveCount(0)
+  }
+})
+
 test('慢生成不会像卡死：进度条旁给出已用时间与预计剩余', async ({ page }) => {
   // 模拟后端 2.5 秒才吐出响应头（真实场景里 design 一段能停 60 秒）
   await generatePlan(page, { chatDelayMs: 2500 })

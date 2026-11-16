@@ -316,6 +316,10 @@ textarea {
 }
 
 .topbar {
+  position: relative;
+  /* 高于 .main 的 10：topbar 的 backdrop-filter 会把工具下拉菜单困在自己的层叠上下文里，
+     不抬层的话菜单下半部分会被聊天内容盖住，点击被拦截（症状：菜单点不动） */
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 14px;
