@@ -4,9 +4,10 @@
   <img alt="langgraph" src="https://img.shields.io/badge/orchestration-LangGraph-ff6f00?logo=langgraph&logoColor=white"/>
   <img alt="react" src="https://img.shields.io/badge/frontend-React%2018%20%2B%20TypeScript-149eca?logo=react&logoColor=white"/>
   <img alt="vite" src="https://img.shields.io/badge/build-Vite-646cff?logo=vite&logoColor=white"/>
-  <img alt="model" src="https://img.shields.io/badge/LLM-qwen--plus%20%7C%20qwen--flash-6f42c1"/>
+  <img alt="model" src="https://img.shields.io/badge/LLM-deepseek--v4.1--flash%20%7C%20qwen--plus-6f42c1"/>
   <img alt="t2i" src="https://img.shields.io/badge/T2I-wan2.5%20%7C%20wanx2.1--turbo-e91e63"/>
-  <img alt="platform" src="https://img.shields.io/badge/deploy-Tencent%20EdgeOne%20Makers-1a73e8"/>
+  <img alt="platform" src="https://img.shields.io/badge/deploy-self--hosted%20%7C%20EdgeOne%20Makers-1a73e8"/>
+  <a href="http://150.158.21.60"><img alt="demo" src="https://img.shields.io/badge/demo-live-brightgreen"/></a>
   <img alt="ci" src="https://github.com/water6161/trick-designer-agent/actions/workflows/ci.yml/badge.svg"/>
   <img alt="license" src="https://img.shields.io/badge/use-educational%20%2F%20demo-green"/>
 </p>
@@ -27,6 +28,15 @@
 </p>
 
 > 一句话需求 → 一份结构完整、可直接使用的长文档方案，外加一整套配套工具链。
+
+> **在线体验**：[http://150.158.21.60](http://150.158.21.60) —— 自托管在腾讯云轻量服务器（2 核 2G / Windows Server），不依赖任何 Serverless 平台。平台版与自托管版共用同一套业务代码，只换了一层入口适配。
+
+**实测耗时**（同一需求，5 人暴风雪山庄密室本）：
+
+| 模式 | 走哪几步 | 耗时 | 产出 |
+| --- | --- | --- | --- |
+| 完整模式 | 联网检索 + 分段生成 + 四维评分 | **84 秒**（优化前 266 秒） | 全量方案 + 评分卡 + 硬规则卡 |
+| 极速模式 ⚡ | 跳过检索与评分，一次出骨架 | **13 秒**（优化前 48 秒） | 7 节主线，线索卡 / 时间线 / DM 台 / 玩家本照常可用 |
 
 ## 目录
 
@@ -72,12 +82,25 @@
 | 网络抖一下、中间层掐断连接，用户就得重写三分钟的需求 | **失败分层 + 有条件的自动重连**：异常先归类（abort / offline / timeout / network / server / client），只有「瞬时故障且一个字都还没吐出来」才自动重连（最多 2 次，全抖动退避）；已吐正文绝不自动续，避免两份内容拼在一起 | e2e 用 `route.abort()` 造连接失败，断言第二次请求救回整份方案、且不留错误横幅 |
 | 任何一处渲染异常，用户看到的是一片白，连「发生了什么」都问不出来 | **顶层 ErrorBoundary + 可复制崩溃报告**：捕获子树异常后渲染说明页，报错文本里带上时间/组件栈/环境，并**隐去 URL 里的分享 token**（解出来就是整份玩家本） | 类组件兜住 hooks 兜不住的渲染期异常；崩溃页本身也有单测（17 条） |
 | 需求写了一半误刷新，草稿全没了 | **输入草稿本地暂存**：8KB 上限、隐私模式/配额满静默降级、发送即清空 | 存储不可用的三条降级路径都有单测，坏掉也不会挡住主流程 |
+| 完整模式一次跑 4 分半，用户以为卡死直接关页面 | **三段提速**：关掉混合思考模型的思考链（`enable_thinking: false`）、主力模型换 `deepseek-v4.1-flash`（比 qwen-plus 快 3~5 倍）、评分节点降级到快模型 | 266s → **84s**；极速模式 48s → **13s**，质量未降（10371 字、六节齐备、lockScore 88） |
+| 等待期间界面只有「正在生成」，用户不知道还要等多久 | **阶段权重 ETA**：六个阶段按实测耗时比例分配剩余时间，倒计时永不归零，超基准 1.8 倍切「比预计慢，仍在生成中」 | 用户能判断「再等 20 秒」还是「切极速模式」，不必盲等 |
+| 新用户进来只看到一个输入框，不知道该说什么 | **首屏三步指引 + 极速开关前置**：直接打字 / 点案件卡立案 / 赶时间开 ⚡；模式开关常驻输入框旁并标注预计时长 | 第一次用不用读文档；极速模式从「隐藏玩法」变成可见选项，且与需求构造器共用同一份状态 |
+| 只能跑在 EdgeOne Makers 上，想换服务器就得重写一遍 | **入口适配层** `server/selfhost.py`：把 `handler(context)` 包成 FastAPI，平台注入的 store / checkpointer / abort signal / env 各自给出本地实现（JSON 文件 + SQLite + `asyncio.Event`） | 同一套业务代码在平台与自建服务器上都能跑，换环境不动业务逻辑 |
+| 「AI 封面换了一百次，还是同一个人只是背景变了」 | **画风维度**：在构图之外再建 10 种画种池（影调 / 笔触 / 材质各自成套），反向词随画风动态适配（写实排除插画、插画排除照片），seed 与画风绑定 | 同题材连点十次出十种视觉语言，不再是一张脸换十个背景 |
 
 ## 功能一览
 
 ### 从一句话到完整方案
 
 - **智能追问**：需求有空白时先问 2~3 个带选项的关键问题；说「直接生成」可跳过
+- **新手三步指引**：首屏直接写明「打一行需求 → 点案件卡立案 → 赶时间开 ⚡」，案件卡的行动文案也是「点击直接立案」，第一次用不需要读任何文档
+- **耗时可见**：生成中实时显示「已用 12 秒 · 预计还需 40 秒」，并按阶段给出进度比例；超过基准 1.8 倍自动切成「比预计慢，仍在生成中」——不再出现「界面一动不动是不是挂了」的疑虑
+- **极速开关**：常驻输入框旁，两种模式各自标注预计时长（⚡ 约 15 秒 / 完整约 1 分半）；开关状态与需求构造器共用同一份数据源，不会两处打架
+
+<p align="center">
+  <img src="docs/screenshots/onboarding.png" width="420" alt="首屏三步上手指引与极速开关"/>
+  <img src="docs/screenshots/eta.png" width="420" alt="生成中的阶段进度与已用/预计时间"/>
+</p>
 - **需求构造器 / 灵感骰子** <img src="docs/screenshots/inspiration-dice.png" width="360" align="right"/>：把需求拆成题材 / 人数 / 难度 / 诡计 / 氛围五个维度逐项选择，拼装成一句完整需求；「灵感骰子」一键从各维度候选池随机抽取组合，适合头脑风暴与快速探索
 - **多方案对比**：一次给出 A/B/C 三个创意方向，选定后展开完整方案
 - **迭代修改**：基于上一版增量调整（换诡计、增删角色、修漏洞），不被旧稿锚定；也支持「补写第 N 部分」恢复降级章节
@@ -86,11 +109,11 @@
 ### 质量保障
 
 - **质量体检评分卡**：方案生成后自动按四维 rubric 打分（每维 0-10 分），给出具体到「加一条什么线索」的改进建议；综合 ≥32 且单项 ≥6 判定「可开本」
-- **硬规则校验卡**：与模型自评并列的**确定性**校验——15 条规则加权得分 + 逐条原因（如「凶手不在角色表内，玩家选不到他」），全部通过时才给「可开本」
+- **硬规则校验卡**：与模型自评并列的**确定性**校验——16 条规则加权得分 + 逐条原因（如「凶手不在角色表内，玩家选不到他」），全部通过时才给「可开本」
 - **诡计成立条件矩阵**：把核心诡计拆成「进出方式 / 上锁时机 / 痕迹处理…」等成立条件，逐条核对手法是否只写在 DM 手册里而没有玩家可见线索承载（**DM 独占信息 = 不公平**）；缺口可一键回填重写
 - **难度与时长预估**：按嫌疑人数 / 线索量 / 手法层数 / 类型负担推算难度档位与开本时长区间，分数构成完全透明
 - **公平性自查**：线索对所有玩家可得，拒绝「只有上帝视角才能破案」的诡计；锁凶证据链要求 2 条独立公开线索 + 1 条深入线索
-- **知识库注入**：9 篇原创诡计方法论（密室破法 / 不在场证明构造 / 叙诡公平边界 / 红鲱鱼设计 / 玩家雷点 20 条等）按需求关键词加权检索注入生成上下文
+- **知识库注入**：24 篇原创诡计方法论（密室破法 / 不在场证明构造 / 叙诡公平边界 / 红鲱鱼设计 / 玩家雷点 20 条 / 分题材的古代武侠·民国·科幻·校园等）按需求关键词加权检索注入生成上下文
 
 ### 开本工具链
 
@@ -121,6 +144,10 @@
 </p>
 
 - **AI 封面**：人物海报 / 群像 / 场景三种构图 + **十种画风**（电影剧照 / 九十年代港片 / 黑白黑色电影 / 浮世绘 / 水墨写意 / 剪纸拼贴 / 赛博朋克 / 古典油画 / 双色丝网印 / 湿版老照片），画风可指定也可随机，反向词随画种动态适配（写实类排除插画、插画类排除照片）；人脸用 wan2.5-t2i-preview（稳定性优先），场景用 wanx2.1-t2i-turbo（速度优先）；**prompt 由方案素材拼成**（角色外形锚点、线索里的真实道具、案发现场），画风/机位/光源/色调按 nonce 轮换 —— 每个本、每次点都出不同的图，同 nonce 可复现
+
+<p align="center">
+  <img src="docs/screenshots/cover-styles.png" width="720" alt="同一份方案在四种画风下的封面：电影剧照 / 水墨写意 / 剪纸拼贴 / 黑白黑色电影"/>
+</p>
 - **沉浸互动剧情**：第二人称冒险，限时抉择 + 死亡/存疑/安全结局 + Web Audio 心跳/死亡音效（零音频文件，实时合成）；每个分镜可「朗读本页」，旁白念的是结构化方案而非 DOM 文本
 - **案件重演**：证据链时间线一键「▶ 重演案件」——按时间轴逐帧回放、关联线索随帧联动、终幕落在凶手真相；播放/暂停/步进/进度点跳帧
 - **全局快捷键**：`/` 聚焦输入、`g d/t/p` 序列开 DM 台/时间线/玩家本、`?` 速查卡；输入态一律让位给打字
@@ -141,11 +168,12 @@
 | --- | --- |
 | 前端 | React 18 + TypeScript + Vite（手写 CSS，无 UI 框架） |
 | 后端 | Python 3.11 + LangGraph（七节点状态机编排）+ LangChain（模型调用 / bind_tools 结构化输出） |
-| 对话模型 | 阿里云 DashScope / 通义千问（qwen-plus 主力、qwen-flash 轻量） |
+| 对话模型 | 阿里云 DashScope：`deepseek-v4.1-flash-1017` 主力（比 qwen-plus 快 3~5 倍）、`qwen-plus` 兜底；两类都是混合思考模型，统一传 `enable_thinking: false` 关掉思考链 |
 | 生图模型 | 通义万相 **wan2.5-t2i-preview**（人物/群像，人脸稳定）与 **wanx2.1-t2i-turbo**（场景，速度优先），按用途分流；异步任务 + 轮询取图 |
 | 检索 | 平台内置 web_search + 本地知识库（kb.py 关键词加权） + 高德地图 API（真实天气注入环境细节） |
 | 流式传输 | SSE（fetch + ReadableStream 手写解析，支持 POST 与自定义头） |
-| 存储 | EdgeOne Makers KV/Blob（LangGraph Checkpointer）+ localStorage |
+| 存储 | 自托管：SQLite 检查点（`AsyncSqliteSaver`，重启不丢版本）+ JSON 文件会话存储；平台版：EdgeOne Makers KV/Blob；前端 localStorage |
+| 部署 | 腾讯云轻量服务器（OpenSSH + 计划任务开机自启 + 5 分钟守护）或 EdgeOne Makers；前端 `dist` 由同一个 FastAPI 进程托管，单端口即可访问 |
 | 图形与音效 | Canvas/SVG 封面合成；Web Audio 实时合成音效（零音频文件） |
 
 ## 架构
@@ -168,13 +196,28 @@ flowchart LR
 | --- | --- | --- |
 | `understand` | 意图分类（new / iterate / question）+ 需求字段抽取（BriefPatch schema）+ 追问判断 + 对比模式识别 | LLM 意图判断 + **正则兜底**（寒暄整句匹配 / 问句特征 / 「直接生成」短语），模型抖动时体验一致 |
 | `research` | 本地知识库关键词加权检索（tags 精确匹配 + 别名归一化，如「暴风雪山庄」→「封闭场景」）+ 联网检索 | 单条 25s 超时，失败仅提示不阻断；**极速模式整段跳过**（多轮网络往返最不值当），并明确提示已跳过 |
-| `design` | 3 段独立流式生成（核心诡计 / 凶手线索 / 时间线沉浸剧情），三段共享同一份大纲与系统提示词；**极速模式改为一次生成骨架**（全文 900 字内、只保留 7 节主线） | 单段超时独立重试（重试自动加「务必精简」），仍失败则占位降级，绝不让整单作废；极速模式省下两次 prefill，超时预算从 195s 收到 95s |
+| `design` | 3 段独立流式生成（核心诡计 / 凶手线索 / 时间线沉浸剧情），三段共享同一份大纲与系统提示词；**极速模式改为一次生成骨架**（全文 900 字内、只保留 7 节主线） | 单段超时独立重试（重试自动加「务必精简」），仍失败则占位降级，绝不让整单作废；极速模式省下两次 prefill，超时预算从 195s 收到 95s。实测这一步占完整模式 84 秒里的 64 秒，是唯一的提速重点 |
 | `extract` | bind_tools 强制 function call，Pydantic 严格校验，从方案提取结构化 JSON | 超时重试 + JSON 解析兜底；失败时前端 parsePlan 从 Markdown 抢救 |
 | `verify` | **纯计算节点**：16 条公平性硬规则（fairness.py）+ 诡计成立条件×线索覆盖矩阵（trick_graph.py）+ 难度时长预估（difficulty.py），结果经 meta.rules 送达前端 | 零模型调用、可单测；结构化缺失时从 Markdown 兜底解析（mdplan.py）；任何异常静默跳过 |
-| `score` | 四维 rubric 打分（线索公平性 / 锁凶闭环 / 时间线自洽 / 红鲱鱼质量），结果经 meta 事件送达前端评分卡 | 极速模式跳过；评分失败静默降级，不影响交付 |
+| `score` | 四维 rubric 打分（线索公平性 / 锁凶闭环 / 时间线自洽 / 红鲱鱼质量），结果经 meta 事件送达前端评分卡；刻意用 fast 档模型跑（打分不需要长推理） | 极速模式跳过；评分失败静默降级，不影响交付 |
 | `compose` | 收尾：标题确定、meta 汇总、咨询问答（qa 模式） | 正文已在 design 实时流式展示，此处只做收尾 |
 
 多轮记忆：`context.store.langgraph_checkpointer` 以 conversation_id 持久化全部状态（messages 全量 + brief/design/quality 等字段），跨实例可恢复；喂给模型的上下文按最近 6~8 条裁剪，**存档与上下文窗口分离**——存的是全量，喂的是最近几句。
+
+### 自托管拓扑
+
+```
+浏览器 ──HTTPS──> uvicorn / FastAPI（server/selfhost.py）
+                    ├── POST /trick-designer → agents/trick-designer/index.py 的 handler
+                    │      └── LangGraph 工作流（与平台版完全同一份业务代码）
+                    ├── POST /stop           → 中止当前运行（asyncio.Event 信号）
+                    ├── GET  /healthz        → 守护脚本与监控探活
+                    └── GET  /*              → dist/ 静态页（SPA，前端路由交给 hash）
+                  data/store.json            会话消息（进程内 JSON + 写锁，原子替换）
+                  data/checkpoints.sqlite3   LangGraph 版本快照（重启不丢，可回退旧稿）
+```
+
+适配层只做四件事：把 `handler(context)` 的返回值转成 Starlette Response、给 `context.request` 补上 body/headers/signal、用 `LocalStore` 顶掉平台 Blob 存储、把 `.env` 与 OS 环境变量合并成 `context.env`。业务层完全不知道自己跑在哪。
 
 ## 关键设计详解
 
@@ -227,12 +270,19 @@ flowchart LR
 ### 生图链路
 
 ```
-前端选风格（character/group/scene）
-→ 后端读会话存储里的结构化 brief（题材/时代/标题）填入三套构图模板
-  （模板 = 构图主体 + 光影 + 胶片质感 + 标题留白 + 负面提示词）
+前端选构图（character / group / scene）+ 画风（🎲 随机 或 10 种画种之一）
+→ 后端读会话里的 brief 与结构化方案素材
+  （标题 / 题材 / 时代 / 角色外形锚点 / 线索里的真实道具 / 案发现场）
+→ 组装 prompt = 画风 style_desc × 构图主体 × 机位光源轮换 × 负向词
+  画风自带色板（平面类用低饱和专色，影调类用高对比单光源），负向词随画风适配：
+  写实类排除「插画 / 卡通」，插画类排除「照片 / 写实皮肤」
+→ seed = fnv1a(标题 | 画风 | 画种 | nonce)：同 nonce 可复现，不同 nonce 必不同
 → 按用途选模型：有人脸 → wan2.5（稳定）；纯场景 → wanx2.1-turbo（快）
 → DashScope 异步任务：提交 → task_id → 3s 轮询（上限 90s）→ 下载转 base64
+→ 响应回带 media / media_label，前端在菜单里标出这次用了哪种画风
 ```
+
+**为什么把画风做成独立维度，而不是往 prompt 里加一句「油画风格」**：模型对「风格形容词」的响应很弱，但画面构成（笔触、色域、材质、光源逻辑）的响应很强。所以十种画风的差别不是十个形容词，而是十套结构化的视觉约束——浮世绘是平涂色块 + 装饰性云纹、湿版老照片是边缘暗角 + 化学污渍、双色丝网印是两色套印偏移。同一份方案素材换一个画种，出来的就是完全不同的视觉语言，而不是同一张脸换个背景。
 
 ## 使用示例
 
@@ -246,11 +296,14 @@ AI：（追问）出发前确认 2 件事：
 你：C，要两个红鲱鱼
 
 AI：🔍 正在检索经典诡计与玩家雷点…
-    📝 正在搭建核心诡计（1/3）…（文字打字机流出）
-    （约 3 分钟后输出完整方案 + 质量体检 33/40 · 可开本）
+    📝 正在搭建核心诡计（1/3）…（文字打字机流出，同时显示「已用 24 秒 · 预计还需 1 分钟」）
+    （约 84 秒后输出完整方案 + 质量体检 33/40 · 可开本）
 
 你：把凶手换成医生，加一条录音机线索
 AI：（iterate 意图）基于上一版增量重写，其余章节保持不变
+
+—— 赶时间的话，发送前把输入框旁的 ⚡ 极速 打开：
+AI：（约 13 秒出 7 节骨架，线索卡 / 时间线 / DM 台 / 玩家本照常可用，但没有分支结局与评分卡）
 ```
 
 ## 项目结构
@@ -278,11 +331,13 @@ AI：（iterate 意图）基于上一版增量重写，其余章节保持不变
 │   ├── trick-designer/index.py  # POST /trick-designer
 │   └── stop/index.py            # POST /stop
 ├── src/
-│   ├── components/              # 18 个组件：聊天、沉浸模式、玩家本（无剧透视角）、
+│   ├── components/              # 25 个组件：首屏三步指引、聊天、输入框（含 ⚡ 极速开关）、
+│   │                            #   阶段进度（已用/预计剩余）、沉浸模式、玩家本（无剧透视角）、
 │   │                            #   DM 主持台、时间线、角色卡、救场手册、质量评分卡、
-│   │                            #   硬规则校验卡、运行指标、需求构造器、导出栏等
+│   │                            #   硬规则校验卡、运行指标、需求构造器、导出栏（含画风菜单）等
 │   ├── lib/api.ts               # SSE 解析（consumeStream/handleEvent）、会话 CRUD
 │   ├── lib/parsePlan.ts         # Markdown → 结构化方案（前端兜底解析）
+│   ├── lib/eta.ts               # 阶段权重耗时预估：已用多久 / 还需多久 / 是否比预计慢
 │   ├── lib/docxExporters.ts     # Word 导出（按需动态加载，首屏不加载 docx 库）
 │   ├── lib/shelf.ts / sound.ts  # 本地书架 / Web Audio 音效
 │   ├── lib/sessionFilter.ts     # 会话列表搜索与时间分组
@@ -291,7 +346,8 @@ AI：（iterate 意图）基于上一版增量重写，其余章节保持不变
 │   ├── lib/annotations.ts       # 本地批注：会话+消息+原文片段锚定（localStorage）
 │   ├── lib/share.ts / speech.ts # 玩家本裁剪与分享编码 / 朗读文本清洗与切块
 │   ├── hooks/useSpeech.ts       # 浏览器语音朗读封装（重入叠音、卸载清理）
-│   └── App.tsx                  # 全局状态编排（含 #/s/* 分享路由分流）
+│   └── App.tsx                  # 全局状态编排（含 #/s/* 分享路由分流、模式与计时唯一数据源）
+├── server/selfhost.py           # 自托管入口：handler → FastAPI + LocalStore + SQLite 检查点
 ├── e2e/                         # Playwright 端到端（真浏览器 + route 回放后端协议）
 ├── docs/screenshots/            # README 展示图
 ├── edgeone.json                 # Makers 项目配置
@@ -305,21 +361,41 @@ AI：（iterate 意图）基于上一版增量重写，其余章节保持不变
 npm install
 python -m venv .venv && source .venv/bin/activate
 pip install -r agents/requirements.txt
+pip install fastapi uvicorn aiosqlite langgraph-checkpoint-sqlite   # 仅自托管需要
 
-# 2. 关联 EdgeOne Makers 项目（同步模型 API Key 等环境变量）
+# 2A. 方式一：EdgeOne Makers 平台（Serverless）
 npm i -g edgeone
-edgeone makers link
-
-# 3. 本地开发
+edgeone makers link      # 同步模型 API Key 等环境变量
 edgeone makers dev       # http://localhost:8088
+
+# 2B. 方式二：自托管（线上实例跑的就是这条）
+npm run build            # 产出 dist/，由同一个 FastAPI 进程一起托管
+cp .env.example .env     # 填 OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL
+python server/selfhost.py # http://localhost/  （PORT 环境变量控制端口，默认 80）
 ```
 
-环境变量（由 `edgeone makers link` 同步）：
+环境变量：
 
 | 变量 | 说明 |
 | --- | --- |
-| 模型 API Key / Base URL | DashScope（qwen + 万相共用） |
-| `AMAP_KEY`（可选） | 高德地图，用于真实天气注入 |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | DashScope 兼容模式端点（对话模型与通义万相共用同一把 Key） |
+| `OPENAI_MODEL` / `OPENAI_MODEL_FAST` | 主力 / 快档模型，实测填 `deepseek-v4.1-flash-1017` 两者皆可 |
+| `PORT` | 自托管监听端口，默认 80 |
+| `AMAP_KEY`（可选） | 高德地图，用于真实天气注入环境细节 |
+| `AI_GATEWAY_*` | 平台部署时由 `edgeone makers link` 注入，自托管不需要 |
+
+### 自托管部署要点（腾讯云轻量 / 任意 Linux 或 Windows 机器）
+
+```text
+1. 代码 + dist/ + .env 放到机器上，python server/selfhost.py 可直接跑
+2. 开机自启：Windows 用 schtasks（onstart，SYSTEM 账户）
+   Linux 用 systemd unit（ExecStart=.../python server/selfhost.py）
+3. 守护：Windows 快速启动常常不触发 onstart 任务，另加一个每 5 分钟的计划任务，
+   发现 python 进程不存在就拉起来；顺带兜住 OOM 与崩溃
+4. 数据落在 data/（store.json 会话、checkpoints.sqlite3 版本快照），备份只拷这个目录
+```
+
+> 踩过的坑：`.env` 被 PowerShell 写成了带 UTF-8 BOM 的文件，导致第一个键名带上 BOM 而读不到——代码里统一用 `utf-8-sig` 读，BOM 存在或不存在都能正常启动。
 
 ## 接口约定
 
@@ -331,9 +407,10 @@ edgeone makers dev       # http://localhost:8088
 | `POST /trick-designer` | `{ "action": "retry" }` | 从 checkpoint 断点续跑 |
 | `POST /trick-designer` | `{ "action": "sessions" }` / `"history"` / `"delete"` | 会话管理 |
 | `POST /trick-designer` | `{ "action": "export" }` | 导出用完整方案（markdown + brief + plan + lock_score） |
-| `POST /trick-designer` | `{ "action": "ai_cover", "cover_style": "character" }` | Base64 封面图（`character` / `group` / `scene`） |
+| `POST /trick-designer` | `{ "action": "ai_cover", "cover_style": "character", "nonce": "n1", "media": "noir" }` | Base64 封面图（构图 `character`/`group`/`scene`；画风 `cine`/`hk90`/`noir`/`ukiyoe`/`ink`/`papercut`/`cyberpunk`/`oil`/`screenprint`/`wetplate`，省略则随机），响应回带 `media` / `media_label` |
 | `POST /trick-designer` | `{ "action": "stats" }` | 运行指标聚合（P50/P95/成功率/阶段耗时/规则失败排行，只含哈希与耗时，不含用户原文） |
 | `POST /stop` | `{ "conversationId": "..." }` | 中止当前运行 |
+| `GET /healthz` | — | 自托管健康检查（`{"ok": true, "ts": "..."}`），守护脚本与监控探活用 |
 
 ## 异常与降级
 
@@ -348,15 +425,18 @@ edgeone makers dev       # http://localhost:8088
 - **模型超时/限流/鉴权失败**：统一转中文友好提示，经 SSE `error` 推送
 - **收尾断流**：正文完整时降级为提示，保留断点重试入口
 - **客户端断开**：监听 `signal` 中止图执行，避免无效 token 消耗
+- **SQLite 检查点不可用**（缺依赖 / 文件被占用）：退回 `InMemorySaver`，服务照常可用，代价是重启后版本历史丢失，日志里留一行 fallback 提示
+- **`.env` 带 UTF-8 BOM 或值带引号**：统一按 `utf-8-sig` 读取并剥掉首尾引号——否则会出现「密钥明明填了，进程里就是读不到」这类最难查的问题
+- **自托管是单进程**：会话存储用「进程内 JSON 文件 + asyncio 锁」，单机完全够用；要横向扩容时只需替换 `LocalStore`（接口已对齐平台 Blob 存储，业务代码一行不用改）
 
 ## 测试与质量自检
 
 ### 自动化测试
 
 ```bash
-pnpm test                        # 前端单元测试（vitest，324 个用例）
-pnpm test:e2e                    # 浏览器端到端（Playwright，19 条路径打穿全链路）
-.venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，228 个用例）
+pnpm test                        # 前端单元测试（vitest，349 个用例 / 26 个文件）
+pnpm test:e2e                    # 浏览器端到端（Playwright，23 条路径打穿全链路）
+.venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，236 个用例）
 pnpm typecheck                   # 全量类型检查
 pnpm build                       # 生产构建
 ```
@@ -380,12 +460,15 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 | `annotations.ts` 本地批注 | 9 | 锚点与去重策略：同句重复加批注=修改、总量上限丢最旧、片段/批注截断、存储抛错（隐私模式/配额满）静默降级、导出文本带出处 |
 | `markdown.tsx` 块级渲染 | 11 | 围栏代码块内的空行是内容不是分界（切坏代码块是最危险回归）；块渲染与整篇渲染等价、CRLF/空输入/未闭合围栏不崩 |
 | `test_speed_mode.py` 极速模式 | 7 | 提速靠三件事，任何一件退化都会慢回去：跳过联网检索（检索工具零调用）、整份骨架只调一次模型（三段会重复 prefill 三遍完整 payload）、payload 不带知识库且上版截断 2000 字；另断言骨架结构能被解析器抓到（角色/凶手/线索/时间线/外形锚点），否则卡片全空 |
-| `cover.py` AI 封面 prompt | 15 | 方案素材真的进了 prompt（外形锚点/真实道具/现场）、抽象线索不当道具、抽象文案不写死「怀表」、seed 随标题与 nonce 变、连续六次生成构图组合不重复、空方案优雅退化、长背景截断、群像人数收在 3~8 |
+| `cover.py` AI 封面 prompt | 23 | 方案素材真的进了 prompt（外形锚点/真实道具/现场）、抽象线索不当道具、抽象文案不写死「怀表」、seed 随标题与 nonce 变、连续六次生成构图组合不重复、空方案优雅退化、长背景截断、群像人数收在 3~8；画风维度另行断言十条画种 key 唯一、指定画风必生效、未知画风回退随机、负向词随画种切换（水墨不再被「写实」反向词压制） |
+| `eta.ts` 耗时预估 | 11 | 倒计时永不归零（0 秒最像卡死）、阶段越靠后剩余越少、极速与完整各用各的基准、超基准 1.8 倍才切「比预计慢」、秒数格式化为「X 分 Y 秒」 |
+| `onboarding` 首屏引导 | 11 | 三步指引与极速开关必须成对出现（只有开关没有说明等于没有）、开关 aria-pressed 状态与 props 一致、提示文案随模式切换、案件卡行动文案不再含糊 |
+| `coverMedia.ts` 前后端画风契约 | 3 | 前端菜单里的画风 key 必须与后端 `_MEDIA` 一个不差——少一个就是「点了没反应」的静默失败，这类跨语言枚举错位只有契约测试拦得住 |
 | `replay.ts` 案件重演帧编排 | 7 | 深入事件带「玩家当时没看到」标记、真相帧只在解析出凶手时收尾、空时间线也能放真相、字段缺失容错 |
 | `backup.ts` 数据备份 | 13 | 往返一致（导出→清空→恢复回来）、新者胜不覆盖本机新稿、草稿不覆盖正在写的内容、非法条目过滤、重复恢复幂等 |
 | `shortcuts.ts` 快捷键决策 | 12 | 输入框/组合键让位给打字、裸按 d/t/p 不误触、g 序列窗口合理、键位表与动作同源 |
 | `annotationsUi` 批注 UI | 8 | 消息批注条渲染与 data-mid 锚点、浮标两态、清单空态/列表/页脚说明；删除按钮 aria-label |
-| `EndingTree` 结局分支树 | 11 | 编号提取（去重/大小写/不误判中文）、真结局徽章只给第一条、幽灵编号标红、空态给引导而非空白 | extract 失败时它是唯一的数据来源，章节残缺也不能抛异常 |
+| `EndingTree` 结局分支树 | 11 | 编号提取（去重/大小写/不误判中文）、真结局徽章只给第一条、幽灵编号标红、空态给引导而非空白 |
 | `verify` 节点行为 | 11 | 挂在主链路上：跳过条件、正文兜底、异常吞咽都必须严格，否则会拖垮交付 |
 | `share.ts` 玩家本裁剪 + 编码 | 18 | 权限不变式：凶手/秘密/深入线索内容/结局类型断言**绝不出现在输出里**；编码往返、截断容错、hash 解析 |
 | `PlayerView` 渲染不变式 | 8 | 用 renderToStaticMarkup 断言敏感内容不进 DOM（含 XSS 转义），分享页模式无关闭入口 |
@@ -398,7 +481,7 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 | `diff.ts` 版本对比 | 19 | 行级 LCS 的还原性（去掉新增行必须等于旧版）、章节归属、删除整章的归属、折叠上下文的边界；另测超长文本退化路径不会卡死 |
 | `draft.ts` 草稿暂存 | 12 | 存储抛错（隐私模式、配额满）必须静默降级——保命功能不能变成新的崩溃点 |
 | `CrashScreen` 崩溃页 | 17 | 断言三条出路都在、默认不吓人地展开堆栈、**分享 token 被隐去** |
-| e2e（Playwright + 真 Chromium） | 19 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路；Esc 关闭弹层按 dialog 语义定位；版本对比走完「打开列表 → 看差异 → 返回」；书架搜索命中正文并给出片段；用 `emulateMedia('print')` 断言打印版式确实变白底且不截断；会话列表走「搜索过滤 → 空态 → 删除二次确认」；结局分支树断言真结局徽章与幽灵编号标红；立绘断言两人 seed/SVG 互不相同且重开弹层后完全一致；DM 手册接管 `window.open` 断言纸上全阶段都在且线索带勾选框；本地批注走完「划选 → 浮标 → 保存 → 清单回跳高亮 → 删除回空态」；备份走完「下载→清空→从文件恢复→内容一致」；快捷键验证聚焦落字与输入态让位；390px 视口断言弹层全宽、触控目标、输入框 16px |
+| e2e（Playwright + 真 Chromium） | 23 | 打穿「输入 → SSE 流式渲染 → 两张体检卡 → 玩家本 → 分享链接 → 新标签页只读页」；后端用 route 回放真实协议，断言敏感信息**在 DOM 里根本不存在**；另用 `route.abort()` 造断连验证自动重连整链路；Esc 关闭弹层按 dialog 语义定位；版本对比走完「打开列表 → 看差异 → 返回」；书架搜索命中正文并给出片段；用 `emulateMedia('print')` 断言打印版式确实变白底且不截断；会话列表走「搜索过滤 → 空态 → 删除二次确认」；结局分支树断言真结局徽章与幽灵编号标红；立绘断言两人 seed/SVG 互不相同且重开弹层后完全一致；DM 手册接管 `window.open` 断言纸上全阶段都在且线索带勾选框；本地批注走完「划选 → 浮标 → 保存 → 清单回跳高亮 → 删除回空态」；备份走完「下载→清空→从文件恢复→内容一致」；快捷键验证聚焦落字与输入态让位；390px 视口断言弹层全宽、触控目标、输入框 16px。新增三条走真实交互：**慢生成时计时确实在涨**（mock 流插了延迟，断言 1s 后文案变化，防「ETA 永远显示 0」这类假实现）、**新手引导与极速开关联动**（点开关后提示文案与 aria-pressed 同步改，且请求体带极速标记）、**工具菜单七个入口逐个可点**（用 `elementFromPoint` 判定「这一刻这个坐标最上层是谁」，专门拦层叠上下文把菜单挡住这类纯视觉 bug） |
 | `telemetry.py` 运行指标 | 20 | P95/成功率算错会误导优化方向；验证分位数、阶段聚合、容量淘汰 |
 | trace 集成（handler 全链路） | 9 | 用假模型跑完真实 SSE 序列，验证 trace 真被记录、心跳不算阶段、错误被聚合 |
 
@@ -418,6 +501,10 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - **时区把「昨天」整组吃掉了**：分组用例里会话时间写 `2026-03-09T20:00:00Z`，而沙箱时区是 UTC+8 —— 本地时间是 3 月 10 日凌晨 4 点，于是这条本该属于「昨天」的会话被判成「今天」，测试报「缺一个分组」。日期断言一律用**不带时区的本地时间**，别让 CI 机器的 `TZ` 决定测试结果
 - **打印样式自己把自己刷白了**：`@media print` 里先给 `.pv-sheet` 设白底，随后又写 `.pv-sheet, .pv-sheet * { background: transparent }` 想清掉子元素底色——同一选择器后写的规则胜出，白底被自己的规则覆盖，打印出来是透明背景。改成只对子元素（`:not(.pv-sheet)`）生效，并用 `emulateMedia('print')` 在 e2e 里读计算样式断言
 - **自动重连不能用「重试」一刀切**：最初想统一 `action: retry` 续跑，但连接阶段失败时后端根本没收到请求，没有断点可续，只会拿到"当前没有可恢复的断点"。改成按失败阶段分流：连接失败原样重发、流中断才续跑
+- **工具菜单下半部分点不动**：菜单看起来完全正常，但鼠标放在下面几项上毫无反应。根因不是 z-index 数值不够，而是顶栏的 `backdrop-filter` 创建了**层叠上下文**——它把子元素困在自己这一层，菜单再抬 z-index 也只在这个上下文内比较，于是一直压在「主内容区」的层之下。修复：给顶栏显式 `position: relative; z-index: 20`，让它作为整体高于内容区（10）、低于弹层（90+）。这类 bug 单测、类型检查、截图对比全都看不见，只能靠 e2e 里 `elementFromPoint` 问「这个坐标上最上层是谁」
+- **两份「极速模式」状态各说各话**：输入框旁加开关时，开关状态存在 Composer，需求构造器里原本也有一份 `state.speed`，两处各自 setState，出现「开关显示开着、实际请求按完整模式跑」。修复：状态提升到 App 作为唯一数据源，子组件只收 props 与回调；顺带处理了 localStorage 里旧键的迁移
+- **服务器重启后服务没起来**：计划任务明明配的是「开机启动 + SYSTEM 账户」，重启后却连不上。原因是 Windows 的**快速启动**不走完整关机流程，onstart 触发器被跳过。修复：不赌单一路径，加一个每 5 分钟跑一次的计划任务，python 进程不存在就拉起来——顺带兜住 OOM 与意外崩溃
+- **换模型后结构化提取偶尔返回空**：换成混合思考模型后 `extract` 节点的 function call 时好时坏，且首字延迟忽高忽低。逐个排除账号权限、出口 IP、参数格式后定位到思考模式本身：长思考吃掉了输出预算，强制 tool call 时 JSON 被截断。修复：请求体统一带 `enable_thinking: false`，顺带把全链路又快了三分之一
 
 ## Roadmap
 
@@ -444,13 +531,26 @@ CI（`.github/workflows/ci.yml`）在每次 push / PR 自动跑：前端类型�
 - [x] 会话列表：时间分组 + 标题搜索；删除会话改为两段式确认（误删不可逆）
 - [x] 多结局分支树：结局分支表 + 支撑线索编号硬校验 + 树状可视化（玩家本依旧不下发）
 - [x] 键盘闭环：Esc 有弹层时关弹层、无弹层时停止生成；输入框提示随状态切换
+- [x] 自托管部署：`handler(context)` 包成 FastAPI，平台的 store / checkpointer / abort signal / env 各自本地化，一台 2 核 2G 的轻量服务器单端口跑全站
+- [x] 生成提速：关掉混合思考的思考链 + 主力换 flash 档模型 + 评分节点降档，完整 266s→84s、极速 48s→13s；`test_speed_mode.py` 守住「别悄悄退化」
+- [x] 耗时可见：阶段权重 ETA + 「比预计慢」兜底 + 倒计时永不归零，生成过程不再是黑盒
+- [x] 新手引导：首屏三步上手指引 + 极速开关前置并标注时长，第一次用不必读文档
+- [x] 封面画风维度：10 种画种池（影调/笔触/材质各自成套）+ 画风绑定 seed + 负向词随画风适配，不再「一张脸换十个背景」
+- [ ] 一次出 4~5 张封面缩略图让用户挑（当前是单张，换一张要点一次）
+- [ ] 自托管多进程/多机：把 `LocalStore` 换成 Redis 或 Postgres，接口已对齐，替换不动业务代码
 
 ## FAQ
 
 **Q: 为什么不用 EventSource？**
 A: EventSource 只支持 GET 且不能带自定义头，而聊天需要 POST + 会话 ID 头，所以用 fetch + ReadableStream 手写解析。
 
-**Q: 为什么 3 分钟就出结果？会不会牺牲质量？**
+**Q: 为什么从 Serverless 迁到自己的服务器？**
+A: 两个原因。一是**成本与可控性**：Serverless 按调用计费、函数有 300 秒硬上限、冷启动与出口 IP 都不受控，调试时「为什么慢」根本问不出来；自托管后能直接看进程日志、加 `curl` 裸调 API 对比耗时、按需换模型。二是**证明架构不绑平台**：业务代码原封不动，只写了 300 行入口适配（`server/selfhost.py`），把平台注入的 store / checkpointer / abort signal 逐个给出本地实现——能迁走，才说明分层是真的。
+
+**Q: 84 秒是优化来的，质量有没有掉？**
+A: 三处改动都不碰提示词与业务规则：关思考链（`enable_thinking: false`）、主力模型换更快的 flash 档、评分节点降档。改完拿同一需求复测：方案 10371 字、六节齐备、lockScore 88，与优化前持平。真正会影响质量的是**极速模式**（跳过检索与评分、只出 7 节骨架），所以它被做成显式开关而不是默认行为，界面上也直接标出「约 15 秒」。
+
+**Q: 为什么 84 秒就出结果？会不会牺牲质量？**
 A: 平台函数 300 秒硬上限是约束条件，不是目标。分段 + deadline 的设计保证「一定在时限内交付」，质量由知识库注入、11 条硬性质量标准和四维评分兜底。
 
 **Q: checkpointer 存了什么？**
@@ -459,11 +559,8 @@ A: 存对话消息与方案状态（按 conversation_id），用于多轮记忆�
 **Q: 知识库是 RAG 吗？**
 A: 是轻量版（RAG-lite）：关键词加权匹配 + tags 别名归一化，不依赖向量库。好处是零外部依赖、检索结果可解释；代价是语义泛化弱于向量检索——语料过百篇后可平滑升级，检索接口不变。
 
-Q: 防同质化靠知识库吗？
-
-A: 不是。知识库负责「写得专业」，防「写得重复」靠诡计查重：历史方案的 trick_types 与核心手法名作为指纹，与当前需求比对，命中则向提示词注入避开与差异化指令。两套机制各管一头。
-
-**Q: 硬规则校验和质量体检评分有什么区别？**
+**Q: 防同质化靠知识库吗？**
+A: 不是。知识库负责「写得专业」，防「写得重复」靠诡计查重：历史方案的 trick_types 与核心手法名作为指纹，与当前需求比对，命中则向提示词注入避开与差异化指令。两套机制各管一头。**Q: 硬规则校验和质量体检评分有什么区别？**
 A: 质量体检是模型按 rubric 给的「软分」，评的是好不好玩、详略是否得当；硬规则是纯代码算的「硬分」，验的是结构上成不成立（凶手在不在角色表、线索有没有获取方式、死亡时间对不对得上时间线）。前者会漂移，后者可复现——两张卡并列展示，互相印证。
 
 **Q: 关键词匹配的成立条件矩阵会误判吗？**
@@ -471,6 +568,12 @@ A: 会，这是刻意取舍。规则只统计「玩家可见材料里有没有�
 
 **Q: 分享链接为什么不用后端短链？**
 A: 会话数据存在带 user_id 鉴权的 Blob 存储里，匿名访问天然不成立；为了分享去开一个无鉴权读接口属于纯增攻击面。方案本身是静态可读数据，deflate + base64url 压进 URL 换来「零存储、零鉴权、链接即快照」，代价是链接较长（实测压缩后 1~2KB）且不会随后续修改更新——对「发朋友开一局」这个场景是正确取舍。另外 SPA 无法按链接动态生成 OG 标签，IM 预览只会显示站点信息，这是已知限制。
+
+**Q: 十种画风是不是就是往 prompt 里加十个形容词？**
+A: 不是。模型对形容词很敷衍，对**画面构成**很敏感。所以每种画风是一整套结构化约束：视觉描述 + 专用色板 + 适配的负向词。例如水墨写意必须去掉「排除插画」这类反向词（否则会把水墨本身压掉），浮世绘要平涂色块和装饰性云纹，湿版要边缘暗角与化学污渍。seed 与「标题 + 画风 + 画种 + nonce」绑定，所以既能复现某一版，又不会两次出同一张。
+
+**Q: 耗时预估估不准怎么办？**
+A: 估不准是必然的——模型输出长度本身就波动。所以设计目标是「别让人以为卡死」，而不是「精确到秒」：倒计时永远保留最低 5 秒、永不归零；单个阶段超出基准 1.8 倍就切成「比预计慢，仍在生成中」并给出可操作建议（等下去 / 停止后改极速模式）。基准值来自服务器端实测（完整 84s、极速 13s），不是拍脑袋。
 
 ## 安全与内容边界
 
