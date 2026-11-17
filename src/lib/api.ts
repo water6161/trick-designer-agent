@@ -239,6 +239,26 @@ export const AI_COVER_MEDIA: { key: AICoverMedia; label: string }[] = [
   { key: 'wetplate', label: '湿版老照片' },
 ]
 
+/** 首屏「画风灵感」位选中的画种，存 localStorage，导出栏的 AI 封面默认用它。 */
+export const COVER_MEDIA_PREF_KEY = 'trick-cover-media'
+
+export function getCoverMediaPref(): AICoverMedia | '' {
+  try {
+    const value = localStorage.getItem(COVER_MEDIA_PREF_KEY) || ''
+    return AI_COVER_MEDIA.some((m) => m.key === value) ? (value as AICoverMedia) : ''
+  } catch {
+    return ''
+  }
+}
+
+export function setCoverMediaPref(key: AICoverMedia): void {
+  try {
+    localStorage.setItem(COVER_MEDIA_PREF_KEY, key)
+  } catch {
+    /* 隐私模式 / 配额满：偏好记不住就算了，不影响主流程 */
+  }
+}
+
 /**
  * 生成 AI 封面插画。
  * nonce 是「换图凭据」：每次传新值就出一张新构图，传同值可复现同一张；
@@ -249,7 +269,7 @@ export async function aiCover(
   conversationId: string,
   style: AICoverStyle = 'character',
   nonce = '',
-  media?: AICoverMedia,
+  media?: AICoverMedia | '',
 ): Promise<{ image: string; title: string; nonce: string; mediaLabel: string }> {
   const response = await fetch(AGENT_URL, {
     method: 'POST',

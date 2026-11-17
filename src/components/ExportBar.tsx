@@ -3,7 +3,7 @@ import { exportPlan } from '../lib/api'
 import type { ExportPlan } from '../lib/api'
 import { copyText, COVER_STYLES, downloadAICoverPNG, downloadCoverPNG, downloadMarkdown, type CoverStyle } from '../lib/exporters'
 import { printPlan } from '../lib/printPlan'
-import { aiCover, AI_COVER_MEDIA, type AICoverMedia, type AICoverStyle } from '../lib/api'
+import { aiCover, AI_COVER_MEDIA, getCoverMediaPref, type AICoverMedia, type AICoverStyle } from '../lib/api'
 
 const AI_COVER_STYLES: { key: AICoverStyle; label: string }[] = [
   { key: 'character', label: '人物海报' },
@@ -64,17 +64,24 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
     }
   }
 
+  // 默认画风偏好：首屏「画风灵感」位设置；本组件在出方案后才挂载，挂载时读一次即可
+  const [prefMedia] = useState(() => getCoverMediaPref())
   const [moreOpen, setMoreOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
 
-  /** 生成 AI 封面：media 不传则后端按 nonce 随机画风 */
-  const genCover = async (media?: AICoverMedia) => {
+  /**
+   * 生成 AI 封面。
+   * media 传具体画种 → 指定画风；传 '' → 每次随机；
+   * 不传 → 先看首屏「画风灵感」选过的默认偏好，没有再随机。
+   */
+  const genCover = async (media?: AICoverMedia | '') => {
     setAiOpen(false)
+    const chosen: AICoverMedia | '' = media !== undefined ? media : prefMedia
     await runCover(async (plan) => {
       const style = AI_COVER_STYLES[aiIdx].key
       // 每次点都是新构图：nonce 变 → 后端 seed、画风、机位、光源、色调一起变
       const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-      const { image, mediaLabel } = await aiCover(conversationId, style, nonce, media)
+      const { image, mediaLabel } = await aiCover(conversationId, style, nonce, chosen)
       downloadAICoverPNG(image, {
         title: plan.title,
         genre: plan.brief?.genre,
@@ -112,19 +119,28 @@ export default function ExportBar({ conversationId, hasPlan, disabled }: Props) 
           className="export-btn export-ai-btn"
           onClick={() => setAiOpen((v) => !v)}
           disabled={busy || disabled}
-          title="AI 封面：默认随机画风（每次点都是不同画种），也可指定画风"
+          title="AI 封面：可用首屏选过的默认画风，也可指定或随机"
         >
           ✨ AI 封面 {aiOpen ? '▴' : '▾'}
         </button>
         {aiOpen && (
           <div className="export-menu export-ai-menu">
-            <button className="export-menu-ai" onClick={() => void genCover()}>
+            {prefMedia && (
+              <button
+                className="export-menu-ai"
+                onClick={() => void genCover()}
+                title="首屏「画风灵感」里选过的画种"
+              >
+                ⭐ 默认：{AI_COVER_MEDIA.find((m) => m.key === prefMedia)?.label}
+              </button>
+            )}
+            <button className="export-menu-ai" onClick={() => void genCover('')}>
               🎲 随机画风（每次不同）
             </button>
             <span className="export-menu-sep">指定画风</span>
             {AI_COVER_MEDIA.map((media) => (
               <button key={media.key} onClick={() => void genCover(media.key)}>
-                {media.label}
+                {media.key === prefMedia ? `⭐ ${media.label}` : media.label}
               </button>
             ))}
           </div>

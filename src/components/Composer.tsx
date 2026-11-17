@@ -11,6 +11,9 @@ interface Props {
   /** 极速开关：与需求构造器共用同一状态（提升到 App） */
   speedMode?: boolean
   onToggleSpeed?: () => void
+  /** 常用需求 chips：输入框为空且非流式时显示，点一下自动填充 */
+  suggestions?: string[]
+  onPickSuggestion?: (text: string) => void
 }
 
 /** 输入框下方提示文案：流式中教停止，平时按模式给耗时预期 */
@@ -28,6 +31,8 @@ export default function Composer({
   disabled,
   speedMode = false,
   onToggleSpeed,
+  suggestions,
+  onPickSuggestion,
 }: Props) {
   const areaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -46,6 +51,15 @@ export default function Composer({
 
   return (
     <div className="composer">
+      {suggestions && onPickSuggestion && !streaming && !value.trim() && (
+        <div className="composer-chips" aria-label="常用需求，点一下自动填充">
+          {suggestions.map((text) => (
+            <button key={text} type="button" onClick={() => onPickSuggestion(text)}>
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
       <div className={`composer-box ${streaming ? 'is-streaming' : ''}`}>
         <textarea
           ref={areaRef}
@@ -53,7 +67,7 @@ export default function Composer({
           className="composer-input"
           rows={1}
           value={value}
-          placeholder="描述题材、人数、难度、想要的诡计类型与特殊设定，或直接追问修改意见…"
+          placeholder="一句话说需求：题材、人数、难度、想要的诡计…"
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {

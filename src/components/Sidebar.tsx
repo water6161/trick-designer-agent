@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CloseIcon, PlusIcon, TrashIcon } from './icons'
 import { filterSessions, groupSessions } from '../lib/sessionFilter'
+import { setCoverMediaPref, type AICoverMedia } from '../lib/api'
 import type { SessionItem } from '../types'
 
 interface Props {
@@ -11,7 +12,17 @@ interface Props {
   onSelect: (id: string) => void
   onDelete: (id: string) => void
   onClose: () => void
+  /** 空态「画风灵感」位：点缩略图设为 AI 封面默认画风 */
+  onPickMedia?: (media: AICoverMedia) => void
 }
+
+/** 空侧栏不放空文案，放画风缩略图——点一张，生成封面时默认用这个画风。与首屏轮播共用同一组图。 */
+const STYLE_SHOTS: { key: AICoverMedia; label: string; src: string }[] = [
+  { key: 'cine', label: '电影剧照', src: 'covers/cine.webp' },
+  { key: 'ukiyoe', label: '浮世绘', src: 'covers/ukiyoe.webp' },
+  { key: 'ink', label: '水墨写意', src: 'covers/ink.webp' },
+  { key: 'noir', label: '黑白电影', src: 'covers/noir.webp' },
+]
 
 function formatTime(value?: string | null): string {
   if (!value) return ''
@@ -39,6 +50,7 @@ export default function Sidebar({
   onSelect,
   onDelete,
   onClose,
+  onPickMedia,
 }: Props) {
   const [query, setQuery] = useState('')
   // 删除会话不可逆（连历史带状态一起没），所以要点两次：第一次只把按钮变成「确认」
@@ -89,7 +101,32 @@ export default function Sidebar({
 
       <div className="session-label">{query.trim() ? `匹配 ${matched} 个` : '最近的剧本'}</div>
       <div className="session-list">
-        {sessions.length === 0 && <p className="session-empty">还没有会话，输入一个题材开始。</p>}
+        {sessions.length === 0 && (
+          <>
+            <p className="session-empty">还没有会话，输入一个题材开始。</p>
+            <div className="style-gallery" aria-label="封面画风灵感">
+              <div className="style-gallery-label">封面画风灵感</div>
+              <div className="style-grid">
+                {STYLE_SHOTS.map((shot) => (
+                  <button
+                    key={shot.key}
+                    type="button"
+                    className="style-thumb"
+                    title={`生成 AI 封面时默认用「${shot.label}」`}
+                    onClick={() => {
+                      setCoverMediaPref(shot.key)
+                      onPickMedia?.(shot.key)
+                    }}
+                  >
+                    <img src={shot.src} alt={shot.label} width={66} height={88} loading="lazy" />
+                    <span>{shot.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="style-gallery-note">点选设为默认画风 · 共 10 种，导出栏可随时换</p>
+            </div>
+          </>
+        )}
 
         {sessions.length > 0 && matched === 0 && (
           <p className="session-empty">没有标题含「{query.trim()}」的会话。</p>
@@ -134,7 +171,7 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar-footer">
-        <span>LangGraph · EdgeOne Makers</span>
+        <span>自托管 · 数据仅存本机</span>
         <span className="footer-note">仅用于虚构剧本杀创作</span>
       </div>
     </aside>

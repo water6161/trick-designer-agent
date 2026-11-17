@@ -35,8 +35,19 @@ function PanelFallback() {
     </div>
   )
 }
+
+/**
+ * 输入框上方的常用需求 chips：点一下填充不直接发送——
+ * 用户还能改人数/难度再发，比「一点就跑」更符合「立案前再确认」的直觉。
+ */
+export const COMPOSER_SUGGESTIONS = [
+  '6 人暴风雪山庄密室，硬核',
+  '5 人民国戏院，身份互换',
+  '6 人叙诡 + 时间线错位',
+]
 import { useOnline } from './hooks/useOnline'
 import {
+  AI_COVER_MEDIA,
   deleteSession,
   getHistory,
   listSessions,
@@ -673,6 +684,10 @@ function MainApp() {
         onSelect={(id) => void openSession(id)}
         onDelete={(id) => void removeSession(id)}
         onClose={() => setSidebarOpen(false)}
+        onPickMedia={(media) => {
+          const label = AI_COVER_MEDIA.find((m) => m.key === media)?.label ?? media
+          setNotice(`已把「${label}」设为默认封面画风，导出栏的 AI 封面将优先使用。`)
+        }}
       />
 
       {sidebarOpen && (
@@ -735,7 +750,7 @@ function MainApp() {
             📊
           </button>
           <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
-            📚 案卷
+            📚 <span className="btn-label">案卷</span>
           </button>
           {/* 阶段变化播报给屏幕阅读器：看不到进度条的人也需要知道"现在到哪一步了" */}
           <div className={`status-pill ${streaming ? 'live' : ''}`} role="status" aria-live="polite">
@@ -894,7 +909,13 @@ function MainApp() {
                   正在载入创作台…
                 </div>
               ) : (
-                <Welcome onPick={(prompt) => void send(prompt)} />
+                    <Welcome
+                  onPick={(prompt) => void send(prompt)}
+                  onPickMedia={(media) => {
+                    const label = AI_COVER_MEDIA.find((m) => m.key === media)?.label ?? media
+                    setNotice(`已把「${label}」设为默认封面画风，导出栏的 AI 封面将优先使用。`)
+                  }}
+                />
               )
             ) : (
               <>
@@ -966,6 +987,8 @@ function MainApp() {
           disabled={loading}
           speedMode={speedMode}
           onToggleSpeed={() => setSpeedMode((s) => !s)}
+          suggestions={COMPOSER_SUGGESTIONS}
+          onPickSuggestion={setInput}
         />
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { AI_COVER_MEDIA } from '../src/lib/api'
+import { describe, expect, it, vi } from 'vitest'
+import { AI_COVER_MEDIA, COVER_MEDIA_PREF_KEY, getCoverMediaPref, setCoverMediaPref } from '../src/lib/api'
 
 /** 从后端 cover.py 里提取 _MEDIA 的 key 列表，作为前后端契约的真相来源 */
 function backendMediaKeys(): string[] {
@@ -28,5 +28,35 @@ describe('AI 封面画风：前后端契约', () => {
     for (const key of ['cine', 'noir', 'ukiyoe', 'ink', 'screenprint']) {
       expect(keys).toContain(key)
     }
+  })
+})
+
+describe('封面画风偏好：首屏灵感位 ↔ 导出栏默认', () => {
+  it('setCoverMediaPref 写入、getCoverMediaPref 读回一致', () => {
+    const store = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    })
+    setCoverMediaPref('ink')
+    expect(store.get(COVER_MEDIA_PREF_KEY)).toBe('ink')
+    expect(getCoverMediaPref()).toBe('ink')
+    vi.unstubAllGlobals()
+  })
+
+  it('localStorage 被篡改成非法 key 时回退空串', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => 'not-a-real-media',
+      setItem: () => {},
+    })
+    expect(getCoverMediaPref()).toBe('')
+    vi.unstubAllGlobals()
+  })
+
+  it('localStorage 不可用（隐私模式）时静默降级不抛异常', () => {
+    vi.stubGlobal('localStorage', undefined)
+    expect(() => setCoverMediaPref('noir')).not.toThrow()
+    expect(getCoverMediaPref()).toBe('')
+    vi.unstubAllGlobals()
   })
 })

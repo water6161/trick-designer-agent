@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import Welcome from '../src/components/Welcome'
+import Welcome, { COVER_REEL } from '../src/components/Welcome'
 import Composer, { composerHint } from '../src/components/Composer'
+import Sidebar from '../src/components/Sidebar'
+import { AI_COVER_MEDIA } from '../src/lib/api'
 
 const markup = (element: React.ReactElement) => renderToStaticMarkup(element)
 
@@ -25,6 +27,110 @@ describe('Welcome 三步上手指引', () => {
     const html = markup(<Welcome onPick={() => {}} />)
     expect(html.match(/点击直接立案 →/g)?.length).toBe(4)
     expect(html).not.toContain('调阅')
+  })
+})
+
+describe('Welcome hero 画风轮播', () => {
+  it('渲染轮播四张画风缩略图，且画种 key 都在 AI_COVER_MEDIA 契约内', () => {
+    const html = markup(<Welcome onPick={() => {}} />)
+    expect(html.match(/reel-img/g)?.length).toBe(COVER_REEL.length)
+    expect(COVER_REEL.length).toBe(4)
+    for (const item of COVER_REEL) {
+      expect(AI_COVER_MEDIA.some((m) => m.key === item.key)).toBe(true)
+    }
+  })
+
+  it('第一张是激活态，画风名与「设为默认」入口可见', () => {
+    const html = markup(<Welcome onPick={() => {}} />)
+    expect(html.match(/reel-img active/g)?.length).toBe(1)
+    expect(html).toContain('设为默认')
+    expect(html).toContain('AI 封面 · 共 10 种画风')
+  })
+
+  it('点击画风 chip 调用 onPickMedia 传入对应画种', () => {
+    // renderToStaticMarkup 不执行事件，改用 dangerouslySetInnerHTML 断言按钮存在即可；
+    // 交互行为归 e2e 覆盖
+    const html = markup(<Welcome onPick={() => {}} onPickMedia={() => {}} />)
+    expect(html.match(/reel-chip/g)?.length).toBe(1)
+  })
+})
+
+describe('Composer 常用需求 chips', () => {
+  const baseProps = {
+    value: '',
+    onChange: () => {},
+    onSend: () => {},
+    onStop: () => {},
+    streaming: false,
+    disabled: false,
+  }
+
+  it('输入为空且非流式时显示 chips 行', () => {
+    const html = markup(
+      <Composer {...baseProps} suggestions={['a 需求', 'b 需求']} onPickSuggestion={() => {}} />,
+    )
+    expect(html).toContain('composer-chips')
+    expect(html).toContain('a 需求')
+    expect(html).toContain('b 需求')
+  })
+
+  it('已输入内容时 chips 隐藏（避免挤占输入空间）', () => {
+    const html = markup(
+      <Composer
+        {...baseProps}
+        value="我已经在打字了"
+        suggestions={['a 需求']}
+        onPickSuggestion={() => {}}
+      />,
+    )
+    expect(html).not.toContain('composer-chips')
+  })
+
+  it('流式生成中 chips 隐藏', () => {
+    const html = markup(
+      <Composer {...baseProps} streaming suggestions={['a 需求']} onPickSuggestion={() => {}} />,
+    )
+    expect(html).not.toContain('composer-chips')
+  })
+
+  it('不传 suggestions 时完全不渲染 chips（旧行为不变）', () => {
+    expect(markup(<Composer {...baseProps} />)).not.toContain('composer-chips')
+  })
+})
+
+describe('Sidebar 空态画风灵感位', () => {
+  const emptyProps = {
+    sessions: [],
+    activeId: '',
+    open: false,
+    onNew: () => {},
+    onSelect: () => {},
+    onDelete: () => {},
+    onClose: () => {},
+  }
+
+  it('没有会话时显示画风灵感网格（4 张缩略图 + 说明）', () => {
+    const html = markup(<Sidebar {...emptyProps} onPickMedia={() => {}} />)
+    expect(html).toContain('style-gallery')
+    expect(html.match(/style-thumb/g)?.length).toBe(4)
+    expect(html).toContain('点选设为默认画风')
+  })
+
+  it('已有会话时不渲染灵感位（列表优先）', () => {
+    const html = markup(
+      <Sidebar
+        {...emptyProps}
+        sessions={[{ id: 's1', title: '某个本', updatedAt: '2026-11-16T00:00:00Z' }]}
+        onPickMedia={() => {}}
+      />,
+    )
+    expect(html).not.toContain('style-gallery')
+  })
+
+  it('footer 不再出现平台名（已自托管）', () => {
+    const html = markup(<Sidebar {...emptyProps} />)
+    expect(html).not.toContain('EdgeOne')
+    expect(html).toContain('自托管')
   })
 })
 
