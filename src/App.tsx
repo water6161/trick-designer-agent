@@ -9,6 +9,7 @@ import Welcome from './components/Welcome'
 import QualityCard from './components/QualityCard'
 import RulesCard from './components/RulesCard'
 import { MenuIcon } from './components/icons'
+import MikuPet from './components/MikuPet'
 
 /**
  * 弹层类组件全部按需加载：它们要等用户点开才出现，却会把首屏包撑大。
@@ -752,6 +753,7 @@ function MainApp() {
           <button className="immersive-btn shelf-btn" onClick={() => { setShelfItems(listShelf()); setShelfOpen(true) }}>
             📚 <span className="btn-label">案卷</span>
           </button>
+          <MikuPet />
           {/* 阶段变化播报给屏幕阅读器：看不到进度条的人也需要知道"现在到哪一步了" */}
           <div className={`status-pill ${streaming ? 'live' : ''}`} role="status" aria-live="polite">
             <span className="dot" />
