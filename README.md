@@ -434,7 +434,7 @@ python server/selfhost.py # http://localhost/  （PORT 环境变量控制端口�
 ### 自动化测试
 
 ```bash
-pnpm test                        # 前端单元测试（vitest，349 个用例 / 26 个文件）
+pnpm test                        # 前端单元测试（vitest，373 个用例 / 27 个文件）
 pnpm test:e2e                    # 浏览器端到端（Playwright，23 条路径打穿全链路）
 .venv/bin/python -m pytest tests/ -q   # 后端单元测试（pytest，236 个用例）
 pnpm typecheck                   # 全量类型检查
