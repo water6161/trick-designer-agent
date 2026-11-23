@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { renderToStaticMarkup } from 'react-dom/server'
 import MikuPet from '../src/components/MikuPet'
 import {
@@ -81,7 +83,30 @@ describe('MikuPet 组件', () => {
     expect(html).toContain('♪')
     expect(html).toContain('aria-pressed="false"')
     expect(html).toContain('miku-btn')
-    // 收起态不该出现 canvas（桌面渲染器也不会有，防将来误加）
+    // SSR 只渲染入口按钮，不渲染 portal 面板
     expect(html).not.toContain('<canvas')
+  })
+})
+
+describe('模型资源体积契约（桌宠打开速度的硬约束）', () => {
+  it('model3.json 引用的是 WebP 贴图，不再用 4MB 的原始 PNG', () => {
+    const model = JSON.parse(readFileSync(new URL('../public/models/miku/miku.model3.json', import.meta.url), 'utf-8')) as {
+      FileReferences: { Textures: string[] }
+    }
+    expect(model.FileReferences.Textures.every((t) => t.endsWith('.webp'))).toBe(true)
+  })
+
+  it('整套模型（含贴图）不超过 1MB——超出意味着有人换回了未压缩资源', () => {
+    const dir = new URL('../public/models/miku/', import.meta.url)
+    let total = 0
+    const walk = (d: URL) => {
+      for (const e of readdirSync(d, { withFileTypes: true })) {
+        const p = new URL(e.name + (e.isDirectory() ? '/' : ''), d)
+        if (e.isDirectory()) walk(p)
+        else total += statSync(fileURLToPath(p)).size
+      }
+    }
+    walk(dir)
+    expect(total).toBeLessThan(1024 * 1024)
   })
 })

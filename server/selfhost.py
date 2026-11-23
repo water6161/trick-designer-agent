@@ -35,7 +35,7 @@ if _AGENTS_DIR not in sys.path:
     sys.path.insert(0, _AGENTS_DIR)
 
 from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
+from fastapi.responses import JSONResponse, Response, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 
@@ -331,8 +331,30 @@ async def healthz():
     return {"ok": True, "ts": _now()}
 
 
+class _CachedStatic(StaticFiles):
+    """静态文件 + 分级缓存头。
+
+    - /assets/*（vite 内容哈希文件名）→ immutable 一年，内容变文件名必变
+    - /models/ /vendor/ /covers/（内容可能原地更新）→ 缓存 1 天，过期后协商 304
+    - 其余（index.html 等）→ no-cache，始终协商，保证发版即生效
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        resp = super().file_response(*args, **kwargs)
+        # starlette 签名：file_response(full_path, stat_result, scope, status_code=200)
+        full_path = args[0] if args else kwargs.get("full_path", "")
+        path = str(full_path).replace("\\", "/")
+        if "/assets/" in path:
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif any(seg in path for seg in ("/models/", "/vendor/", "/covers/")):
+            resp.headers["Cache-Control"] = "public, max-age=86400"
+        else:
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
 if DIST_DIR.is_dir():
-    app.mount("/", StaticFiles(directory=str(DIST_DIR), html=True), name="static")
+    app.mount("/", _CachedStatic(directory=str(DIST_DIR), html=True), name="static")
 
 
 @app.on_event("startup")

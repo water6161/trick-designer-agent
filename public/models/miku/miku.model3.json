@@ -3,7 +3,7 @@
 	"FileReferences": {
 		"Moc": "miku.moc3",
 		"Textures": [
-			"miku.2048/texture_00.png"
+			"miku.2048/texture_00.webp"
 		],
 		"Physics": "miku.physics3.json",
 		"DisplayInfo": "miku.cdi3.json",
